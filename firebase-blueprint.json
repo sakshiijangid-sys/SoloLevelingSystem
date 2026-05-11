@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "A project tracked by the user with RPG mechanics.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The Clerk user ID." },
+        "name": { "type": "string", "description": "Project name." },
+        "description": { "type": "string", "description": "Project description." },
+        "startDate": { "type": "string", "format": "date", "description": "Start date (YYYY-MM-DD)." },
+        "targetDate": { "type": "string", "format": "date", "description": "Target end date (YYYY-MM-DD)." },
+        "goal": { "type": "string", "description": "The ultimate quest." },
+        "progress": { "type": "number", "description": "Progress percentage (0-100)." },
+        "xp": { "type": "number", "description": "Experience points earned." },
+        "level": { "type": "number", "description": "Current level." },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "Current status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
+      },
+      "required": ["userId", "name", "startDate", "targetDate"]
+    },
+    "DailyCheck": {
+      "title": "Daily Check",
+      "description": "A daily progress check for a project.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "The associated project ID." },
+        "userId": { "type": "string", "description": "The Clerk user ID." },
+        "date": { "type": "string", "format": "date", "description": "The date (YYYY-MM-DD)." },
+        "completed": { "type": "boolean", "description": "Whether the task was completed." }
+      },
+      "required": ["projectId", "userId", "date", "completed"]
+    },
+    "MonthlyReport": {
+      "title": "Monthly Report",
+      "description": "A monthly summary of project progress with task levels.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "The associated project ID." },
+        "month": { "type": "string", "description": "The month (YYYY-MM)." },
+        "levels": { "type": "array", "description": "List of task levels for the month." },
+        "summary": { "type": "string", "description": "A summary of the month's progress." }
+      },
+      "required": ["projectId", "month"]
+    },
+    "DailyTask": {
+      "title": "Daily Task",
+      "description": "A specific task for a project on a given date.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "date": { "type": "string", "format": "date", "description": "YYYY-MM-DD" },
+        "reminderTime": { "type": "string", "description": "HH:mm format" }
+      },
+      "required": ["projectId", "userId", "text", "completed", "date"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A message in the AI chat history.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "role", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User projects."
+    },
+    "/projects/{projectId}/dailyTasks/{taskId}": {
+      "schema": "DailyTask",
+      "description": "Daily tasks for a specific project."
+    },
+    "/dailyChecks/{checkId}": {
+      "schema": "DailyCheck",
+      "description": "Daily completion records."
+    },
+    "/monthlyReports/{reportId}": {
+      "schema": "MonthlyReport",
+      "description": "Monthly reports with levels."
+    },
+    "/users/{userId}/chatHistory/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "User's AI chat history."
+    }
+  }
+}

@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definition
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Helpers
+    function isValidProject(data) {
+      return data.keys().hasAll(['userId', 'name', 'startDate', 'targetDate', 'progress', 'xp', 'level', 'status']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.targetDate is string && data.targetDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             data.xp is number && data.xp >= 0 &&
+             data.level is number && data.level >= 1 &&
+             data.status in ['active', 'completed'];
+    }
+
+    function isValidDailyCheck(data) {
+      return data.keys().hasAll(['projectId', 'userId', 'date', 'completed']) &&
+             data.projectId is string &&
+             data.userId == request.auth.uid &&
+             data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.completed is bool;
+    }
+
+    function isValidDailyTask(data) {
+      return data.keys().hasAll(['projectId', 'userId', 'text', 'completed', 'date']) &&
+             data.projectId is string &&
+             data.userId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 500 &&
+             data.completed is bool &&
+             data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             (!data.keys().contains('reminderTime') || data.reminderTime == null || (data.reminderTime is string && data.reminderTime.matches('^\\d{2}:\\d{2}$')));
+    }
+
+    function isValidChatMessage(data) {
+      return data.userId == request.auth.uid &&
+             data.role in ['user', 'model'] &&
+             data.text is string && data.text.size() > 0;
+    }
+
+    function isValidMonthlyReport(data) {
+      return data.keys().hasAll(['projectId', 'month']) &&
+             data.projectId is string &&
+             data.month is string && data.month.matches('^\\d{4}-\\d{2}$');
+    }
+
+    // Projects
+    match /projects/{projectId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidProject(incoming()) && (
+        // Identity Integrity
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        // Action based updates
+        (incoming().diff(existing()).affectedKeys().hasOnly(['progress', 'xp', 'level', 'status', 'completedAt', 'lastProcessed']))
+      );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Daily Tasks
+      match /dailyTasks/{taskId} {
+        allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+        allow create: if isSignedIn() && isValidId(taskId) && isValidDailyTask(incoming()) && incoming().createdAt == request.time && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+        allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidDailyTask(incoming()) && (
+          incoming().userId == existing().userId &&
+          // Action: Toggle or Edit text
+          (incoming().diff(existing()).affectedKeys().hasAny(['completed', 'text', 'reminderTime', 'projectName']))
+        );
+        allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      }
+    }
+
+    // Daily Checks
+    match /dailyChecks/{checkId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(checkId) && isValidDailyCheck(incoming()) && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Monthly Reports
+    match /monthlyReports/{reportId} {
+      allow read: if isSignedIn() && (resource == null || get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid);
+      // Logic for creating/updating monthly reports - usually system generated or by project owner
+      allow create, update: if isSignedIn() && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.userId == request.auth.uid && isValidMonthlyReport(incoming());
+      allow delete: if isSignedIn() && get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+    }
+
+    // Users (PII Isolation)
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      
+      // Chat History
+      match /chatHistory/{messageId} {
+        allow read, create: if isOwner(userId);
+      }
+    }
+
+    // Collection Group Rule for Daily Tasks (Needed for AlarmMonitor)
+    match /{path=**}/dailyTasks/{taskId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

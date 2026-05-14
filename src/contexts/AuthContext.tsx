@@ -36,8 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Force local persistence to help mobile WebViews
     setPersistence(auth, browserLocalPersistence);
 
+    console.log("Firebase Auth Domain:", auth.config.authDomain);
+    
     // Handle the result of a redirect login (important for mobile)
-    getRedirectResult(auth).catch((error) => {
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        console.log("Redirect login successful:", result.user.email);
+      }
+    }).catch((error) => {
       console.error("Redirect login error:", error);
     });
 

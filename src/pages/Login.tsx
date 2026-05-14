@@ -40,18 +40,29 @@ export default function Login() {
               <li>Go to <b>Authentication</b> &gt; <b>Settings</b> &gt; <b>Authorized domains</b></li>
               <li>Click <b>Add domain</b> and enter: <code className="bg-red-900/30 px-1 rounded">{window.location.hostname}</code></li>
             </ol>
+            <button 
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="mt-2 w-full bg-purple-600 text-white text-[10px] py-2 rounded-lg font-bold"
+            >
+              OPEN IN SYSTEM BROWSER
+            </button>
           </div>
         );
-      } else if (err.message?.includes('missing initial state')) {
+      } else if (err.message?.includes('missing initial state') || err.code === 'auth/popup-closed-by-user') {
         setError(
           <div className="text-left space-y-2">
-            <p className="font-bold text-red-500">Initialization Error (Missing State)</p>
-            <p className="text-xs">This happens in some mobile apps. Try these solutions:</p>
-            <ul className="list-disc ml-5 text-[10px] space-y-1">
-              <li>Enable the <b>"Google Sign-In"</b> plugin in Median (not just Analytics).</li>
-              <li>Open this URL in your phone's <b>Standard Browser</b> (Chrome or Safari).</li>
-              <li>Check your <b>Authorized Domains</b> in Firebase Console for your Vercel URL.</li>
-            </ul>
+            <p className="font-bold text-red-500">System Blocked by Browser</p>
+            <p className="text-xs">Your app's browser is blocking the login state. Please use the button below to log in via your main phone browser:</p>
+            <button 
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="w-full bg-purple-600 text-white text-[10px] py-2 rounded-lg font-bold"
+            >
+              LOGIN IN STANDARD BROWSER (CHROME/SAFARI)
+            </button>
+            <div className="mt-2 p-2 bg-purple-500/10 rounded-lg text-[9px]">
+              <p className="font-bold uppercase mb-1">Developer Tip:</p>
+              <p>Make sure the "Google Sign-In" plugin is enabled in your Median.co dashboard.</p>
+            </div>
           </div>
         );
       } else {

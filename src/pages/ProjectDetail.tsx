@@ -367,41 +367,41 @@ export default function ProjectDetail() {
   });
 
   return (
-    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-24 pb-12 px-6 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-20 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-6 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
           <button 
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-white transition-colors font-bold uppercase tracking-widest text-xs"
+            className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] sm:text-xs"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Back to Dashboard
           </button>
 
-          <div className="bg-white/80 dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-3xl p-4 sm:p-8 backdrop-blur-sm space-y-6 sm:space-y-8 transition-colors">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-6">
-              <div className="space-y-2">
-                <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-tight">
+          <div className="bg-white/80 dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-2xl sm:rounded-3xl p-4 sm:p-8 backdrop-blur-sm space-y-6 sm:space-y-8 transition-colors">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-6">
+              <div className="space-y-1 sm:space-y-2">
+                <h1 className="text-xl sm:text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-tight">
                   {project.name}
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 font-medium text-sm sm:text-base">{project.description}</p>
+                <p className="text-gray-500 dark:text-gray-400 font-medium text-xs sm:text-base">{project.description}</p>
               </div>
               <div className="text-left sm:text-right shrink-0">
-                <div className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">Current Level</div>
-                <div className="text-2xl sm:text-3xl font-black italic text-purple-600 dark:text-purple-500 leading-none">Level {project.level}</div>
+                <div className="text-[8px] sm:text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-0.5 sm:mb-1">Current Level</div>
+                <div className="text-xl sm:text-3xl font-black italic text-purple-600 dark:text-purple-500 leading-none">Level {project.level}</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-50 dark:bg-black/40 border border-gray-100 dark:border-purple-500/10 p-4 rounded-2xl space-y-1 transition-colors">
-                <div className="text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-widest">Start Date</div>
-                <div className="text-sm font-mono text-purple-600 dark:text-purple-300">{project.startDate}</div>
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-3 sm:gap-6">
+              <div className="bg-gray-50 dark:bg-black/40 border border-gray-100 dark:border-purple-500/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-0.5 sm:space-y-1 transition-colors">
+                <div className="text-[8px] sm:text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-widest">Start Date</div>
+                <div className="text-[10px] sm:text-sm font-mono text-purple-600 dark:text-purple-300">{project.startDate}</div>
               </div>
-              <div className="bg-gray-50 dark:bg-black/40 border border-gray-100 dark:border-purple-500/10 p-4 rounded-2xl space-y-1 transition-colors">
-                <div className="text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-widest">Target Date</div>
-                <div className="text-sm font-mono text-purple-600 dark:text-purple-300">{project.targetDate}</div>
+              <div className="bg-gray-50 dark:bg-black/40 border border-gray-100 dark:border-purple-500/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-0.5 sm:space-y-1 transition-colors">
+                <div className="text-[8px] sm:text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-widest">Target Date</div>
+                <div className="text-[10px] sm:text-sm font-mono text-purple-600 dark:text-purple-300">{project.targetDate}</div>
               </div>
             </div>
 
@@ -412,30 +412,30 @@ export default function ProjectDetail() {
               className="py-4"
             />
 
-            <div className="bg-purple-600/5 dark:bg-purple-600/10 border border-purple-500/10 dark:border-purple-500/20 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
-                  <Trophy className="text-white w-6 h-6" />
+            <div className="bg-purple-600/5 dark:bg-purple-600/10 border border-purple-500/10 dark:border-purple-500/20 p-4 sm:p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 transition-colors text-center sm:text-left">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)] shrink-0">
+                  <Trophy className="text-white w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Main Quest</div>
-                  <div className="text-lg font-bold text-gray-900 dark:text-white italic">{project.goal}</div>
+                  <div className="text-[8px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Main Quest</div>
+                  <div className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white italic">{project.goal}</div>
                 </div>
               </div>
 
               {isSuccessfullyCompleted ? (
-                <div className="flex items-center gap-2 text-green-400 font-black italic uppercase tracking-widest text-sm">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="flex items-center gap-2 text-green-400 font-black italic uppercase tracking-widest text-[10px] sm:text-sm">
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   Quest Finished
                 </div>
               ) : isFailed ? (
-                <div className="flex items-center gap-2 text-red-500 font-black italic uppercase tracking-widest text-sm">
-                  <AlertCircle className="w-5 h-5" />
+                <div className="flex items-center gap-2 text-red-500 font-black italic uppercase tracking-widest text-[10px] sm:text-sm">
+                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                   Quest Unfinished
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-purple-400 font-black italic uppercase tracking-widest text-sm">
-                  <Zap className="w-5 h-5 animate-pulse" />
+                <div className="flex items-center gap-2 text-purple-400 font-black italic uppercase tracking-widest text-[10px] sm:text-sm">
+                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
                   In Progress
                 </div>
               )}
@@ -473,14 +473,14 @@ export default function ProjectDetail() {
 
         {/* Sidebar Calendar */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-3xl p-6 backdrop-blur-sm space-y-6 transition-colors shadow-xl dark:shadow-none">
+          <div className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-sm space-y-4 sm:space-y-6 transition-colors shadow-xl dark:shadow-none">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-base sm:text-lg font-black uppercase tracking-widest flex items-center gap-2">
+                <h2 className="text-sm sm:text-lg font-black uppercase tracking-widest flex items-center gap-2">
                   <CalendarIcon className="w-4 h-4 sm:w-5 h-5 text-purple-600 dark:text-purple-500" />
                   Quest Log
                 </h2>
-                <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-mono uppercase tracking-widest mt-1">Track your progress</p>
+                <p className="text-[8px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-mono uppercase tracking-widest mt-0.5 sm:mt-1">Track your progress</p>
               </div>
               <div className="flex items-center gap-2 sm:gap-4">
                 <button 
@@ -491,11 +491,11 @@ export default function ProjectDetail() {
                   className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-white transition-colors"
                   title="Screenshot Mode"
                 >
-                  <Maximize2 className="w-4 h-4" />
+                  <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <div className="flex gap-2">
-                  <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-                  <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"><ChevronRight className="w-4 h-4" /></button>
+                <div className="flex gap-1 sm:gap-2">
+                  <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-0.5 sm:p-1 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"><ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                  <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-0.5 sm:p-1 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"><ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                 </div>
               </div>
             </div>

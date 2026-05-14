@@ -43,90 +43,90 @@ export default function NewProject() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-24 pb-12 px-6 transition-colors duration-300">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-20 sm:pt-24 pb-8 sm:pb-12 px-4 sm:px-6 transition-colors duration-300">
+      <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
         <button 
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-white transition-colors font-bold uppercase tracking-widest text-xs"
+          className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] sm:text-xs"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           Back to Dashboard
         </button>
 
-        <div className="space-y-2">
-          <h1 className="text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent">
+        <div className="space-y-1 sm:space-y-2">
+          <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent">
             Start a New Quest
           </h1>
-          <p className="text-gray-500 dark:text-gray-500 font-mono text-sm uppercase tracking-widest">
+          <p className="text-gray-500 dark:text-gray-500 font-mono text-[10px] sm:text-sm uppercase tracking-widest">
             Enter the details for your new quest.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 p-8 rounded-3xl backdrop-blur-sm shadow-xl dark:shadow-[0_0_30px_rgba(168,85,247,0.1)] transition-colors">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                <Zap className="w-3 h-3" /> Quest Name
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 p-5 sm:p-8 rounded-2xl sm:rounded-3xl backdrop-blur-sm shadow-xl dark:shadow-[0_0_30px_rgba(168,85,247,0.1)] transition-colors">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                <Zap className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Quest Name
               </label>
               <input
                 required
                 type="text"
                 placeholder="e.g., Master React.js"
-                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                <Info className="w-3 h-3" /> Description
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Description
               </label>
               <textarea
                 rows={3}
                 placeholder="Write a short description..."
-                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                  <Calendar className="w-3 h-3" /> Start Date
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                  <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Start Date
                 </label>
                 <input
                   required
                   type="date"
-                  className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                  <Calendar className="w-3 h-3" /> Target Date
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                  <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Target Date
                 </label>
                 <input
                   required
                   type="date"
-                  className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                   value={formData.targetDate}
                   onChange={(e) => setFormData({ ...formData, targetDate: e.target.value })}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                <Target className="w-3 h-3" /> Main Quest
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Main Quest
               </label>
               <input
                 required
                 type="text"
                 placeholder="e.g., Land a Senior Developer job"
-                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                className="w-full bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-purple-500/30 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                 value={formData.goal}
                 onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
               />
@@ -138,7 +138,7 @@ export default function NewProject() {
             whileTap={{ scale: 0.98 }}
             disabled={loading}
             type="submit"
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'SAVING...' : 'START QUEST'}
           </motion.button>

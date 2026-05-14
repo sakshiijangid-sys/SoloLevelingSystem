@@ -61,27 +61,27 @@ export default function Home() {
       const QuestCard = ({ project, type }: { project: Project; type: 'active' | 'finished' | 'unfinished'; key?: string }) => (
         <motion.div
           whileHover={{ y: -5 }}
-          className={`bg-white/50 dark:bg-gray-900/40 border rounded-2xl p-6 space-y-6 transition-all group backdrop-blur-sm ${
+          className={`bg-white/50 dark:bg-gray-900/40 border rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6 transition-all group backdrop-blur-sm ${
             type === 'finished' ? 'border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.1)]' :
             type === 'unfinished' ? 'border-red-500/30' :
             'border-gray-200 dark:border-purple-500/20 hover:border-purple-500/50 shadow-sm dark:shadow-none'
           }`}
         >
           <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <h3 className={`text-xl font-bold transition-colors uppercase tracking-tight ${
+            <div className="space-y-1 overflow-hidden">
+              <h3 className={`text-base sm:text-xl font-bold transition-colors uppercase tracking-tight truncate ${
                 type === 'finished' ? 'text-green-600 dark:text-green-400' :
                 type === 'unfinished' ? 'text-red-600 dark:text-red-400' :
                 'text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400'
               }`}>
                 {project.name}
               </h3>
-              <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-                <Calendar className="w-3 h-3" />
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-500 font-mono">
+                <Calendar className="w-2.5 h-2.5 sm:w-3 h-3" />
                 {project.targetDate}
               </div>
             </div>
-            <div className={`px-3 py-1 rounded-full text-xs font-black italic border ${
+            <div className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-black italic border shrink-0 ${
               type === 'finished' ? 'bg-green-600/10 dark:bg-green-600/20 text-green-600 dark:text-green-400 border-green-500/30' :
               type === 'unfinished' ? 'bg-red-600/10 dark:bg-red-600/20 text-red-600 dark:text-red-400 border-red-500/30' :
               'bg-purple-600/10 dark:bg-purple-600/20 text-purple-600 dark:text-purple-400 border-purple-500/30'
@@ -116,7 +116,7 @@ export default function Home() {
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-20 pb-20 px-4 sm:px-6 transition-colors duration-300">
       <div className="max-w-7xl mx-auto space-y-12 sm:space-y-20">
         
-        <section className={`relative h-[500px] sm:h-[600px] rounded-[2.5rem] overflow-hidden border border-purple-500/30 group shadow-2xl transition-all duration-700 ${isDark ? 'bg-black px-4' : 'bg-purple-50 px-4'}`}>
+        <section className={`relative h-[400px] sm:h-[600px] rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden border border-purple-500/30 group shadow-2xl transition-all duration-700 ${isDark ? 'bg-black px-4' : 'bg-purple-50 px-4'}`}>
           {/* Anime Room Background Layers */}
           <div className="absolute inset-0 z-0">
             {isDark ? (
@@ -390,38 +390,38 @@ export default function Home() {
               </p>
             </motion.div>
 
-            <div className="flex flex-wrap justify-center gap-4 pt-4">
+            <div className="flex flex-wrap justify-center gap-3 pt-2 sm:pt-4">
               {authLoading ? (
-                <div className="w-48 h-14 bg-purple-900/20 border border-purple-500/20 rounded-xl animate-pulse" />
+                <div className="w-40 h-12 bg-purple-900/20 border border-purple-500/20 rounded-xl animate-pulse" />
               ) : (
                 <>
                   {user ? (
                     <Link 
                       to="/new-project"
-                      className={`px-10 py-5 rounded-2xl font-black flex items-center gap-3 transition-all hover:-translate-y-1 shadow-xl uppercase tracking-[0.2em] ${
+                      className={`px-6 sm:px-10 py-3 sm:py-5 rounded-xl sm:rounded-2xl text-xs sm:text-base font-black flex items-center gap-2 sm:gap-3 transition-all hover:-translate-y-1 shadow-xl uppercase tracking-[0.2em] ${
                           isDark 
                           ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' 
                           : 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.3)] hover:shadow-[0_8px_25px_rgba(168,85,247,0.4)]'
                       }`}
                     >
-                      <Plus className="w-6 h-6" />
+                      <Plus className="w-4 h-4 sm:w-6 sm:h-6" />
                       START NEW QUEST
                     </Link>
                   ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                       <Link 
                         to="/login"
-                        className={`px-10 py-5 rounded-2xl font-black flex items-center gap-3 transition-all hover:-translate-y-1 shadow-xl uppercase tracking-[0.2em] ${
+                        className={`px-6 sm:px-10 py-3 sm:py-5 rounded-xl sm:rounded-2xl text-xs sm:text-base font-black flex items-center gap-2 sm:gap-3 transition-all hover:-translate-y-1 shadow-xl uppercase tracking-[0.2em] ${
                             isDark 
                             ? 'bg-purple-600 text-white hover:bg-purple-500' 
                             : 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.3)] hover:shadow-[0_8px_25px_rgba(168,85,247,0.4)]'
                         }`}
                       >
-                        <Zap className="w-6 h-6 animate-bounce" />
+                        <Zap className="w-4 h-4 sm:w-6 sm:h-6 animate-bounce" />
                         ACCESS SYSTEM
                       </Link>
                       
-                      <p className={`text-[10px] font-bold uppercase tracking-[0.2em] px-4 py-2 rounded-full border transition-colors ${
+                      <p className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-[0.2em] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border transition-colors ${
                           isDark 
                           ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' 
                           : 'text-purple-700 border-purple-500/30 bg-purple-50'

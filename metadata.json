@@ -1,5 +1,6 @@
 {
   "name": "Solo Leveling System",
   "description": "A simple and friendly quest tracking app with easy-to-use levels and points.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

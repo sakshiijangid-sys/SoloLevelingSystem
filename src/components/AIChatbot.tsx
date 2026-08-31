@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation } from 'react-router-dom';
-import { X, Send, Sparkles, User, Loader2, Globe, History, ChevronLeft, Calendar, Zap, Sword, AlertCircle } from 'lucide-react';
+import { X, Send, Sparkles, User, Loader2, Globe, History, ChevronLeft, Calendar, Zap, Sword, AlertCircle, Key, Trash2, CheckCircle2 } from 'lucide-react';
 import RobotIcon from './RobotIcon';
-import { chatWithAI } from '../services/geminiService';
+import { chatWithAI, getApiKey, setCustomApiKey } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
 import Markdown from 'react-markdown';
 import { cn } from '../lib/utils';
-import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns';
 
@@ -51,11 +51,16 @@ export default function AIChatbot() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [showAuthNotice, setShowAuthNotice] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [customKeyInput, setCustomKeyInput] = useState('');
+  const [keySavedNotice, setKeySavedNotice] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isQuestPage = location.pathname.includes('/project/');
   const userName = user?.displayName || (user?.email ? user.email.split('@')[0] : "Adventurer");
+
+  const hasConfiguredKey = Boolean(getApiKey());
 
   const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
     const errInfo: FirestoreErrorInfo = {
@@ -157,7 +162,6 @@ export default function AIChatbot() {
             });
           } catch (e) {
             console.error("Failed to save initial greeting:", e);
-            // Non-critical: we still show the greeting in UI state
           }
         }
       } catch (error) {
@@ -187,6 +191,32 @@ export default function AIChatbot() {
     }
   }, [showAuthNotice]);
 
+  const handleSaveApiKey = () => {
+    setCustomApiKey(customKeyInput);
+    setKeySavedNotice(true);
+    setTimeout(() => {
+      setKeySavedNotice(false);
+      setShowKeyModal(false);
+    }, 1200);
+  };
+
+  const handleClearHistory = async () => {
+    if (!user) return;
+    try {
+      const chatPath = `users/${user.uid}/chatHistory`;
+      const q = query(collection(db, chatPath));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, chatPath, d.id)));
+      await Promise.all(deletePromises);
+      
+      const greeting = `Hey ${userName}! Ready to start fresh? What would you like to level up today?`;
+      setMessages([{ role: 'model', text: greeting }]);
+      setView('chat');
+    } catch (e) {
+      console.error("Failed to clear chat history:", e);
+    }
+  };
+
   const handleSend = async (forcedMessage?: string) => {
     if ((!input.trim() && !forcedMessage) || isLoading || !user) return;
 
@@ -211,10 +241,13 @@ export default function AIChatbot() {
         console.error("Failed to save user message:", e);
       }
 
-      const history = messages.map(m => ({
-        role: m.role,
-        parts: [{ text: m.text }]
-      }));
+      // Filter out error strings and non-dialogue system messages from LLM history
+      const history = messages
+        .filter(m => !m.text.includes("Oracle Connection Configuration") && !m.text.includes("Forgive me, the magical connection is weak"))
+        .map(m => ({
+          role: m.role,
+          parts: [{ text: m.text }]
+        }));
 
       const aiResponse = await chatWithAI(userMessage, history, userName);
       const botText = aiResponse.text || "Quest logic activated.";
@@ -235,7 +268,7 @@ export default function AIChatbot() {
                 userId: user.uid,
                 name: questName,
                 description: description,
-                goal: description.slice(0, 50), // Fallback quest
+                goal: description.slice(0, 50),
                 startDate: startDate,
                 targetDate: endDate,
                 status: "active",
@@ -263,9 +296,6 @@ export default function AIChatbot() {
                   reminderTime: task.reminderTime || null
                 });
               }
-
-              // UI Feedback in chat is usually handled by the model's final message 
-              // which we encouraged in the system instruction.
             } catch (fsError) {
               handleFirestoreError(fsError, OperationType.WRITE, `projects/${questName}`);
             }
@@ -284,8 +314,28 @@ export default function AIChatbot() {
       } catch (e) {
         console.error("Failed to save AI response:", e);
       }
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'model', text: "Forgive me, the magical connection is weak. I could not reach the Oracle. Please try again later." }]);
+    } catch (error: any) {
+      console.error("Chat error details:", error);
+      let errorMsg = "Forgive me, the magical connection is weak. I could not reach the Oracle. Please try again later.";
+      
+      const errString = error?.message || String(error || '');
+      if (
+        errString.includes("GEMINI_API_KEY_MISSING") || 
+        errString.includes("API key not valid") || 
+        errString.includes("apiKey is required") || 
+        errString.includes("403") || 
+        errString.includes("API_KEY_INVALID")
+      ) {
+        errorMsg = "⚠️ **Oracle Key Required**\n\nThe Gemini API Key is missing or invalid in your live deployment.\n\nClick the 🔑 **API Key icon** at the top right of this chat window to paste your Gemini API key, or set `GEMINI_API_KEY` in your Vercel Project Settings.";
+      } else if (errString.includes("429") || errString.includes("RESOURCE_EXHAUSTED") || errString.includes("quota")) {
+        errorMsg = "⏳ **Oracle Cooldown**\n\nThe AI quota limit was temporarily reached. Please wait a few moments and try your request again.";
+      } else if (errString.includes("400") || errString.includes("INVALID_ARGUMENT")) {
+        errorMsg = "⚠️ **Communication Signal Mismatch**\n\nThe message history was reset. Please try sending your request again.";
+      } else {
+        errorMsg = `⚠️ **Oracle Connection Notice**\n\n${errString.slice(0, 150)}\n\nYou can configure your API Key using the 🔑 key icon above.`;
+      }
+      
+      setMessages(prev => [...prev, { role: 'model', text: errorMsg }]);
     } finally {
       setIsLoading(false);
     }
@@ -296,7 +346,6 @@ export default function AIChatbot() {
     const botMsg: Message = { role: 'model', text: greeting };
     setMessages(prev => [...prev, botMsg]);
     
-    // Save to Firestore
     if (user) {
       addDoc(collection(db, `users/${user.uid}/chatHistory`), {
         userId: user.uid,
@@ -333,6 +382,22 @@ export default function AIChatbot() {
               </div>
               <div className="flex items-center gap-1">
                 <button
+                  onClick={() => {
+                    setCustomKeyInput(getApiKey());
+                    setShowKeyModal(!showKeyModal);
+                  }}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors relative",
+                    showKeyModal ? "bg-black/40 text-purple-200" : "hover:bg-black/20 text-white/70 hover:text-white"
+                  )}
+                  title="Configure Gemini API Key"
+                >
+                  <Key className="w-5 h-5" />
+                  {!hasConfiguredKey && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+                  )}
+                </button>
+                <button
                   onClick={() => setView(view === 'chat' ? 'history' : 'chat')}
                   className={cn(
                     "p-2 rounded-lg transition-colors",
@@ -344,6 +409,63 @@ export default function AIChatbot() {
                 </button>
               </div>
             </div>
+
+            {/* API Key Configuration Overlay Modal */}
+            <AnimatePresence>
+              {showKeyModal && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-zinc-900 border-b border-purple-500/30 p-4 text-white z-20"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-purple-300">
+                      <Key className="w-4 h-4 text-purple-400" />
+                      <span>Gemini API Key Configuration</span>
+                    </div>
+                    <button onClick={() => setShowKeyModal(false)} className="text-gray-400 hover:text-white text-xs">
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-300 mb-3 leading-tight">
+                    Enter your Google AI Studio API Key to enable AI responses across any deployment:
+                  </p>
+                  <div className="space-y-2">
+                    <input
+                      type="password"
+                      placeholder="AIzaSy..."
+                      value={customKeyInput}
+                      onChange={(e) => setCustomKeyInput(e.target.value)}
+                      className="w-full text-xs bg-black/60 border border-purple-500/40 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
+                    />
+                    <div className="flex items-center justify-between pt-1">
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-purple-400 hover:underline"
+                      >
+                        Get free API key ↗
+                      </a>
+                      <button
+                        onClick={handleSaveApiKey}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                      >
+                        {keySavedNotice ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-300" />
+                            Saved!
+                          </>
+                        ) : (
+                          "Save Key"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* View Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -419,7 +541,7 @@ export default function AIChatbot() {
                         <div className="flex flex-col mr-auto items-start max-w-[85%] space-y-1">
                           <div className="flex items-center gap-2 mb-1">
                             <Loader2 className="w-3 h-3 text-purple-400 animate-spin" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Finding answers...</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Consulting Oracle...</span>
                           </div>
                           <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2">
                             <Globe className="w-4 h-4 text-white/40 animate-pulse" />
@@ -462,10 +584,19 @@ export default function AIChatbot() {
                           <Send className="w-5 h-5" />
                         </button>
                       </div>
-                      <div className="mt-2 text-center">
-                        <span className="text-[8px] font-mono text-gray-600 uppercase tracking-widest">
-                          Powered by AI Assistant // Smart Search Active
+                      <div className="mt-2 flex items-center justify-between px-1">
+                        <span className="text-[8px] font-mono text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                          Powered by Gemini AI
                         </span>
+                        {!hasConfiguredKey && (
+                          <button
+                            onClick={() => setShowKeyModal(true)}
+                            className="text-[9px] text-amber-500 hover:underline font-bold flex items-center gap-0.5"
+                          >
+                            <Key className="w-2.5 h-2.5" />
+                            Key Setup
+                          </button>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -482,13 +613,23 @@ export default function AIChatbot() {
                         <History className="w-4 h-4 text-purple-500" />
                         <h3 className="text-sm font-black uppercase tracking-widest text-white">Previous Chats</h3>
                       </div>
-                      <button 
-                        onClick={() => setView('chat')}
-                        className="text-[10px] uppercase font-black tracking-tighter text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                      >
-                        <ChevronLeft className="w-3 h-3" />
-                        Back to Chat
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleClearHistory}
+                          className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                          title="Clear chat history"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Clear
+                        </button>
+                        <button 
+                          onClick={() => setView('chat')}
+                          className="text-[10px] uppercase font-black tracking-tighter text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                          Back
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-8">
@@ -518,7 +659,6 @@ export default function AIChatbot() {
                               <button
                                 key={idx}
                                 onClick={() => {
-                                  // This is a simple implementation, ideally we scroll to this message
                                   setView('chat');
                                 }}
                                 className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/5 hover:border-purple-500/30 hover:bg-white/10 transition-all group"

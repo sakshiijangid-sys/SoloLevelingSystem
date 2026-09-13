@@ -49,3 +49,20 @@ export interface DailyTask {
   reminderTime?: string; // HH:mm
   projectName?: string; // Denormalized for alarms
 }
+
+export interface DailyBonusStatus {
+  lastDailyLoginDate: string; // YYYY-MM-DD
+  streak: number; // Consecutive days
+  todayBonusGranted: boolean;
+  todayBonusXP: number;
+  totalBonusXP: number;
+  claimedAt?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  lastDailyLoginDate?: string;
+  dailyLoginStreak?: number;
+  totalDailyBonusXP?: number;
+  lastClaimedAt?: string;
+}

@@ -1,9 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { DailyBonusProvider } from './contexts/DailyBonusContext';
 import Navbar from './components/Navbar';
 import AIChatbot from './components/AIChatbot';
 import AlarmMonitor from './components/AlarmMonitor';
+import DailyBonusModal from './components/DailyBonusModal';
 import Home from './pages/Home';
 import ProjectDetail from './pages/ProjectDetail';
 import NewProject from './pages/NewProject';
@@ -39,6 +41,7 @@ function AppContent() {
         <Navbar />
         <AIChatbot />
         <AlarmMonitor />
+        <DailyBonusModal />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -78,9 +81,12 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <AppContent />
+          <DailyBonusProvider>
+            <AppContent />
+          </DailyBonusProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
 }
+

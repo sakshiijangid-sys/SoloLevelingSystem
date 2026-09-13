@@ -54,10 +54,10 @@ export default function NewProject() {
         </button>
 
         <div className="space-y-1 sm:space-y-2">
-          <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-sm sm:text-base md:text-xl font-normal font-heading uppercase tracking-wide bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-relaxed">
             Start a New Quest
           </h1>
-          <p className="text-gray-500 dark:text-gray-500 font-mono text-[10px] sm:text-sm uppercase tracking-widest">
+          <p className="text-gray-600 dark:text-gray-400 font-sans text-xs sm:text-sm tracking-wide">
             Enter the details for your new quest.
           </p>
         </div>

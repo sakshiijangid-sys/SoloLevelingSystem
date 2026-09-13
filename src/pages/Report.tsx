@@ -49,10 +49,9 @@ export default function Report() {
 
       // 2. Ensure all levels up to projectLevel are marked as completed, others not
       updatedLevels = updatedLevels.map(lvl => {
-        // A level is completed if progress has passed its milestone
-        // Level 1: 0%, Level 2: 20%, Level 3: 40%, Level 4: 60%, Level 5: 80%
-        const milestoneGoal = (lvl.index - 1) * 20;
-        const shouldBeCompleted = project.progress >= milestoneGoal || lvl.index < project.level;
+        // 3 levels in one quest: triggers on 40% > level 1, 70% > level 2, 100% > level 3
+        const milestoneGoal = lvl.index === 1 ? 40 : lvl.index === 2 ? 70 : 100;
+        const shouldBeCompleted = project.progress >= milestoneGoal;
         
         if (lvl.isCompleted !== shouldBeCompleted) {
           needsUpdate = true;
@@ -152,10 +151,10 @@ export default function Report() {
         </button>
 
         <div className="space-y-2">
-          <h1 className="text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-sm sm:text-base md:text-xl font-normal font-heading uppercase tracking-wide bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-relaxed">
             Monthly Report: {format(parseISO(`${month}-01`), 'MMMM yyyy')}
           </h1>
-          <p className="text-gray-500 dark:text-gray-500 font-mono text-sm uppercase tracking-widest">
+          <p className="text-gray-600 dark:text-gray-400 font-sans text-xs sm:text-sm tracking-wide">
             Quest: {project.name} • Level: {project.level}
           </p>
         </div>
@@ -164,11 +163,11 @@ export default function Report() {
           <div className="md:col-span-2 space-y-6">
             <div className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-3xl p-8 backdrop-blur-sm space-y-8 transition-colors">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-purple-600 dark:text-purple-500" />
+                <h2 className="text-xs sm:text-sm font-normal font-heading uppercase tracking-wider flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-purple-600 dark:text-purple-500" />
                   Quest Progress
                 </h2>
-                <span className="text-purple-600 dark:text-purple-400 font-mono text-sm">{completedCount} / {report.levels.length} Levels</span>
+                <span className="text-purple-600 dark:text-purple-400 font-mono text-xs sm:text-sm">{completedCount} / {report.levels.length} Levels</span>
               </div>
 
               <div className="space-y-4">

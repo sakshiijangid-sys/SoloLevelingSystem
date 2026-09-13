@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, getDocs, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -8,15 +8,16 @@ import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { GoogleGenAI } from "@google/genai";
 
 import RPGProgressBar from '../components/RPGProgressBar';
+import QuestLevelList, { calculateQuestLevel, getQuestLevelDetails, QUEST_LEVEL_MILESTONES } from '../components/QuestLevelList';
+import LevelUpOverlay from '../components/LevelUpOverlay';
+import AnalogClockPicker from '../components/AnalogClockPicker';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 
   Calendar as CalendarIcon, 
   CheckCircle2, 
   Circle, 
-  Trophy, 
   TrendingUp, 
-  FileText,
   ChevronRight,
   AlertCircle,
   Zap,
@@ -29,10 +30,12 @@ import {
   Minimize2,
   Clock,
   AlarmClock,
-  Bot
+  Bot,
+  Flame
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, isPast, parseISO, endOfDay, startOfWeek, endOfWeek, isSameMonth } from 'date-fns';
 import { cn } from '../lib/utils';
+import { playLevelUpSound, playProjectCompleteSound, playTaskCheckSound } from '../lib/soundEffects';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +45,20 @@ export default function ProjectDetail() {
   const [dailyChecks, setDailyChecks] = useState<DailyCheck[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
-  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  const [levelUpData, setLevelUpData] = useState<{
+    level: number;
+    previousLevel: number;
+    questName: string;
+    xpGained: number;
+    type: 'levelup' | 'quest_complete';
+  }>({
+    level: 1,
+    previousLevel: 1,
+    questName: '',
+    xpGained: 500,
+    type: 'levelup'
+  });
   const [systemMessage, setSystemMessage] = useState<string | null>(null);
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
@@ -52,6 +68,7 @@ export default function ProjectDetail() {
   const [systemTip, setSystemTip] = useState<string>("Working on your quests every day helps you finish them faster. Keep it up!");
   const [isGeneratingTip, setIsGeneratingTip] = useState(false);
   const [showScreenshotNotice, setShowScreenshotNotice] = useState(false);
+  const [clockPickerTask, setClockPickerTask] = useState<DailyTask | null>(null);
 
   // Handle auto-hide screenshot notice
   useEffect(() => {
@@ -101,11 +118,16 @@ export default function ProjectDetail() {
 
     const qTasks = query(
       collection(db, 'projects', id, 'dailyTasks'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'asc')
+      where('userId', '==', user.uid)
     );
     const unsubTasks = onSnapshot(qTasks, (snapshot) => {
-      setDailyTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyTask)));
+      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyTask));
+      tasks.sort((a: any, b: any) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        return timeA - timeB;
+      });
+      setDailyTasks(tasks);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `projects/${id}/dailyTasks`);
     });
@@ -131,31 +153,55 @@ export default function ProjectDetail() {
   }, [id, user, authLoading, navigate]);
 
   useEffect(() => {
-    if (!project || isGeneratingTip || systemTip !== "Working on your quests every day helps you finish them faster. Keep it up!") return;
+    if (!project || isGeneratingTip) return;
+
+    const questTips = [
+      "Working on your quests every day helps you finish them faster. Keep it up!",
+      `Focus on today's goals for "${project.name}" to build continuous momentum.`,
+      "Consistency turns simple daily tasks into monumental hunter achievements.",
+      "Complete one objective at a time with full focus to maximize your XP.",
+      "Small daily victories lead to epic milestones over time. Stay the course!"
+    ];
 
     const generateTip = async () => {
+      // Check if a usable Gemini API key is configured
+      const key =
+        (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
+        '';
+
+      if (!key || key === 'MY_GEMINI_API_KEY') {
+        // Use a curated quest tip if no key is configured
+        const randomTip = questTips[Math.floor(Math.random() * questTips.length)];
+        setSystemTip(randomTip);
+        return;
+      }
+
       setIsGeneratingTip(true);
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: key });
         const prompt = `You are a helpful and simple assistant. Give one short, friendly, and very simple tip for someone working on a quest called "${project.name}". Use very simple words. No jargon. Do not use quotes. Max 15 words.`;
         
         const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3.8-flash",
           contents: prompt,
         });
 
-        if (response.text) {
-          setSystemTip(response.text.trim());
+        if (response?.text) {
+          setSystemTip(response.text.trim().replace(/^["']|["']$/g, ''));
         }
       } catch (error) {
-        console.error("Failed to generate system tip:", error);
+        // Fall back gracefully without logging a fatal error
+        console.warn("Using offline system tip fallback:", error instanceof Error ? error.message : error);
+        const fallbackTip = questTips[Math.floor(Math.random() * questTips.length)];
+        setSystemTip(fallbackTip);
       } finally {
         setIsGeneratingTip(false);
       }
     };
 
     generateTip();
-  }, [project, systemTip, isGeneratingTip]);
+  }, [project?.id, project?.name]);
 
 
 
@@ -246,8 +292,12 @@ export default function ProjectDetail() {
     }
 
     try {
+      const willBeCompleted = !task.completed;
+      if (willBeCompleted) {
+        playTaskCheckSound();
+      }
       await updateDoc(doc(db, 'projects', id, 'dailyTasks', task.id), {
-        completed: !task.completed
+        completed: willBeCompleted
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `projects/${id}/dailyTasks/${task.id}`);
@@ -304,12 +354,12 @@ export default function ProjectDetail() {
       if (existingCheck) {
         await deleteDoc(doc(db, 'dailyChecks', existingCheck.id));
         // Update project progress, XP, status and completedAt
-        const newChecksCount = dailyChecks.length - 1;
-        const newProgress = (newChecksCount / totalDays) * 100;
+        const newChecksCount = Math.max(0, dailyChecks.length - 1);
+        const newProgress = Math.max(0, (newChecksCount / totalDays) * 100);
         const newXP = Math.max(0, project.xp - 50);
         
-        // Ensure level respects progress down-scaling as well for consistency
-        const newLevel = Math.max(1, Math.floor(newProgress / 20) + 1);
+        // 3 levels in one quest: triggers on 40% > level 1, 70% > level 2, 100% > level 3
+        const newLevel = calculateQuestLevel(newProgress);
         
         await updateDoc(doc(db, 'projects', id), {
           progress: newProgress,
@@ -325,23 +375,38 @@ export default function ProjectDetail() {
           date: dateStr,
           completed: true
         });
+
+        playTaskCheckSound();
         
         // Update project progress, XP, status and completedAt
         const newChecksCount = dailyChecks.length + 1;
-        const newProgress = (newChecksCount / totalDays) * 100;
+        const newProgress = Math.min(100, (newChecksCount / totalDays) * 100);
         const newXP = project.xp + 50;
         
-        // Calculate new level based on progress milestones (20% intervals)
-        const completedMilestones = Math.floor(newProgress / 20);
-        const milestoneLevel = completedMilestones + 1;
-        const xpLevel = Math.floor(newXP / 1000) + 1;
+        // 3 levels in one quest: triggers on 40% > level 1, 70% > level 2, 100% > level 3
+        const prevLevel = calculateQuestLevel(project.progress);
+        const newLevel = calculateQuestLevel(newProgress);
         
-        // Use the higher of progress-based or XP-based level
-        const newLevel = Math.max(milestoneLevel, xpLevel);
-        
-        if (newLevel > project.level) {
-          setShowLevelUp(true);
-          setTimeout(() => setShowLevelUp(false), 3000);
+        if (newProgress >= 100 && project.progress < 100) {
+          // Quest fully cleared / Level 3 Cleared
+          setLevelUpData({
+            level: 3,
+            previousLevel: Math.max(0, prevLevel),
+            questName: project.name,
+            xpGained: 500,
+            type: 'quest_complete'
+          });
+          setShowLevelUpModal(true);
+        } else if (newLevel > prevLevel) {
+          // Hunter Level Up triggered (40% > level 1, 70% > level 2)
+          setLevelUpData({
+            level: newLevel,
+            previousLevel: prevLevel,
+            questName: project.name,
+            xpGained: newLevel === 2 ? 350 : 200,
+            type: 'levelup'
+          });
+          setShowLevelUpModal(true);
         }
 
         await updateDoc(doc(db, 'projects', id), {
@@ -366,6 +431,9 @@ export default function ProjectDetail() {
     end: endOfMonth(currentMonth)
   });
 
+  const currentQuestLevel = calculateQuestLevel(project.progress);
+  const questLevelDetails = getQuestLevelDetails(project.progress);
+
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white pt-20 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-6 transition-colors duration-300">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -383,14 +451,32 @@ export default function ProjectDetail() {
           <div className="bg-white/80 dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-2xl sm:rounded-3xl p-4 sm:p-8 backdrop-blur-sm space-y-6 sm:space-y-8 transition-colors">
             <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-6">
               <div className="space-y-1 sm:space-y-2">
-                <h1 className="text-xl sm:text-4xl font-black uppercase tracking-tighter italic bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-tight">
+                <h1 className="text-sm sm:text-base md:text-xl font-normal font-heading uppercase tracking-wide bg-gradient-to-r from-gray-900 via-purple-600 to-purple-500 dark:from-white dark:to-purple-500 bg-clip-text text-transparent leading-relaxed">
                   {project.name}
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 font-medium text-xs sm:text-base">{project.description}</p>
+                <p className="text-gray-600 dark:text-gray-400 font-normal text-sm sm:text-base tracking-wide">{project.description}</p>
               </div>
               <div className="text-left sm:text-right shrink-0">
-                <div className="text-[8px] sm:text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-0.5 sm:mb-1">Current Level</div>
-                <div className="text-xl sm:text-3xl font-black italic text-purple-600 dark:text-purple-500 leading-none">Level {project.level}</div>
+                <div className="text-[9px] sm:text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">
+                  Quest Level
+                </div>
+                <button
+                  id="btn-preview-level-up"
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('quest-milestones-list');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                  }}
+                  className="group inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-purple-500/10 hover:bg-purple-500/20 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 border border-purple-500/30 hover:border-purple-500/60 dark:border-purple-400/30 dark:hover:border-purple-400/60 rounded-xl transition-all duration-300 shadow-sm hover:shadow-[0_0_15px_rgba(168,85,247,0.25)] cursor-pointer"
+                  title="Quest Level Status - Click to view milestones"
+                >
+                  <Flame className={cn("w-4 h-4 text-purple-500 group-hover:text-purple-400", currentQuestLevel > 0 && "animate-pulse")} />
+                  <span className="text-xs sm:text-sm font-normal font-heading text-purple-600 dark:text-purple-400 leading-none">
+                    {questLevelDetails.label}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -409,25 +495,41 @@ export default function ProjectDetail() {
               value={project.progress} 
               max={100} 
               label="Progress" 
-              className="py-4"
+              className="py-2"
             />
 
+            {/* Sleek Theme-Based 3-Tier Quest Leveling List */}
+            <div id="quest-milestones-list">
+              <QuestLevelList
+                progress={project.progress}
+              />
+            </div>
+
             <div className="bg-purple-600/5 dark:bg-purple-600/10 border border-purple-500/10 dark:border-purple-500/20 p-4 sm:p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 transition-colors text-center sm:text-left">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)] shrink-0">
-                  <Trophy className="text-white w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <div>
-                  <div className="text-[8px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Main Quest</div>
-                  <div className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white italic">{project.goal}</div>
-                </div>
+              <div>
+                <div className="text-[8px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Main Quest</div>
+                <div className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white italic">{project.goal}</div>
               </div>
 
               {isSuccessfullyCompleted ? (
-                <div className="flex items-center gap-2 text-green-400 font-black italic uppercase tracking-widest text-[10px] sm:text-sm">
+                <button
+                  id="btn-trigger-quest-cleared"
+                  onClick={() => {
+                    setLevelUpData({
+                      level: project.level,
+                      previousLevel: Math.max(1, project.level - 1),
+                      questName: project.name,
+                      xpGained: 500,
+                      type: 'quest_complete'
+                    });
+                    setShowLevelUpModal(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-xl text-green-400 font-black italic uppercase tracking-widest text-[10px] sm:text-sm transition-all hover:scale-105"
+                  title="View Quest Cleared Level Up Screen"
+                >
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Quest Finished
-                </div>
+                  <span>Quest Finished</span>
+                </button>
               ) : isFailed ? (
                 <div className="flex items-center gap-2 text-red-500 font-black italic uppercase tracking-widest text-[10px] sm:text-sm">
                   <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -440,34 +542,6 @@ export default function ProjectDetail() {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Monthly Reports Section */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-6 bg-purple-500 rounded-full" />
-              <h2 className="text-2xl font-black uppercase tracking-tighter italic">Monthly Reports</h2>
-            </div>
-            
-            <Link 
-              to={`/project/${id}/report/${format(currentMonth, 'yyyy-MM')}`}
-              className="block bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 p-6 rounded-2xl hover:border-purple-600 dark:hover:border-purple-500 transition-all group shadow-sm hover:shadow-md dark:shadow-none"
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-center transition-colors">
-                    <FileText className="text-purple-600 dark:text-purple-400 w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg uppercase tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                      {format(currentMonth, 'MMMM yyyy')} Report
-                    </h3>
-                    <p className="text-xs text-gray-500 font-mono">View monthly progress levels and achievements</p>
-                  </div>
-                </div>
-                <ChevronRight className="text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-              </div>
-            </Link>
           </div>
         </div>
 
@@ -529,9 +603,9 @@ export default function ProjectDetail() {
                       )}
                     >
                       <span className={cn(
-                        "text-[8px] sm:text-[10px] font-mono mb-0.5",
-                        isChecked ? "text-white" : "text-gray-400 dark:text-gray-500",
-                        isCurrentDay && !isChecked && "text-purple-600 dark:text-purple-400"
+                        "text-[10px] sm:text-xs md:text-sm lg:text-base font-mono font-medium mb-0.5 transition-all",
+                        isChecked ? "text-white font-bold" : "text-gray-600 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-300",
+                        isCurrentDay && !isChecked && "text-purple-600 dark:text-purple-400 font-bold"
                       )}>
                         {format(day, 'd')}
                       </span>
@@ -578,7 +652,7 @@ export default function ProjectDetail() {
                 <span className="text-[8px] font-mono text-gray-500">{format(new Date(), 'yyyy-MM-dd')}</span>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -593,25 +667,25 @@ export default function ProjectDetail() {
                         }
                       }
                     }}
-                    className="flex-1 bg-gray-50 dark:bg-black/60 border border-gray-200 dark:border-purple-500/20 rounded-lg px-3 py-1.5 text-[10px] text-gray-900 dark:text-white focus:outline-none focus:border-purple-500/50 font-bold italic transition-colors"
+                    className="flex-1 bg-gray-50 dark:bg-black/60 border border-gray-200 dark:border-purple-500/20 rounded-lg px-3 py-2 sm:py-2.5 text-xs sm:text-sm md:text-base text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-purple-500/50 font-medium transition-colors"
                   />
                 </div>
 
-                <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar">
                   {dailyTasks
                     .filter(t => t.date === format(new Date(), 'yyyy-MM-dd'))
                     .map(task => (
-                      <div key={task.id} className="flex flex-col gap-1 p-2 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-lg group/item transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div key={task.id} className="flex flex-col gap-1.5 p-2.5 sm:p-3 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-lg group/item transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
                             <button
                               onClick={() => toggleTask(task)}
                               className={cn(
-                                "w-3 h-3 rounded-sm border flex items-center justify-center shrink-0 transition-colors",
+                                "w-4 h-4 sm:w-5 sm:h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors",
                                 task.completed ? "bg-purple-500 border-purple-400" : "border-purple-500/30"
                               )}
                             >
-                              {task.completed && <CheckCircle2 className="w-2 h-2 text-white" />}
+                              {task.completed && <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />}
                             </button>
                             <input
                               type="text"
@@ -626,27 +700,78 @@ export default function ProjectDetail() {
                                 if (e.key === 'Enter') e.currentTarget.blur();
                               }}
                               className={cn(
-                                "bg-transparent border-none focus:ring-0 p-0 text-[10px] font-bold italic w-full truncate transition-colors",
+                                "bg-transparent border-none focus:ring-0 p-0 text-xs sm:text-sm md:text-base font-medium w-full truncate transition-colors",
                                 task.completed ? "line-through text-gray-400 dark:text-gray-600" : "text-gray-900 dark:text-white"
                               )}
                             />
                           </div>
-                          <div className="flex items-center gap-1">
-                            <div className="relative group/clock flex items-center gap-1 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                              <AlarmClock className={cn("w-2.5 h-2.5", task.reminderTime ? "text-purple-400" : "text-gray-600")} />
-                              <span className="text-[7px] font-black text-purple-400/80 uppercase tracking-tighter">Alert</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div 
+                              className={cn(
+                                "relative group/clock flex items-center gap-1 px-2 py-1 rounded-md border transition-all",
+                                task.reminderTime
+                                  ? "bg-purple-100 text-purple-900 border-purple-300 shadow-sm dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/40 dark:shadow-[0_0_10px_rgba(168,85,247,0.2)]"
+                                  : "bg-slate-100/80 text-slate-600 border-slate-200 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 dark:bg-white/5 dark:text-zinc-400 dark:border-white/10 dark:hover:border-purple-500/30 dark:hover:bg-purple-500/10 dark:hover:text-purple-300"
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setClockPickerTask(task)}
+                                title="Open Theme-Based Analog Clock"
+                                className="flex items-center gap-1 focus:outline-none transition-transform hover:scale-105"
+                              >
+                                <AlarmClock 
+                                  className={cn(
+                                    "w-3 h-3 sm:w-3.5 sm:h-3.5 transition-colors",
+                                    task.reminderTime 
+                                      ? "text-purple-700 dark:text-purple-300" 
+                                      : "text-slate-500 group-hover/clock:text-purple-700 dark:text-zinc-400 dark:group-hover/clock:text-purple-300"
+                                  )} 
+                                />
+                                <span className={cn(
+                                  "text-[9px] sm:text-xs font-bold uppercase tracking-tight transition-colors",
+                                  task.reminderTime
+                                    ? "text-purple-800 dark:text-purple-300"
+                                    : "text-slate-600 group-hover/clock:text-purple-700 dark:text-zinc-400 dark:group-hover/clock:text-purple-300"
+                                )}>
+                                  Alert
+                                </span>
+                                {task.reminderTime && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse inline-block" />
+                                )}
+                              </button>
                               <input
                                 type="time"
                                 value={task.reminderTime || ""}
                                 onChange={(e) => updateTaskReminder(task.id, e.target.value || null)}
-                                className="bg-transparent border-none p-0 text-[8px] font-bold text-purple-400 focus:ring-0 w-12 cursor-pointer"
+                                onClick={() => setClockPickerTask(task)}
+                                title="Click to open theme-based analog clock selection"
+                                className={cn(
+                                  "bg-transparent border-none p-0 text-[10px] sm:text-xs font-mono font-bold focus:ring-0 w-14 sm:w-16 cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none [&::-webkit-calendar-picker-indicator]:!w-0 [&::-webkit-calendar-picker-indicator]:!h-0",
+                                  task.reminderTime
+                                    ? "text-purple-900 dark:text-purple-200"
+                                    : "text-slate-600 dark:text-zinc-400"
+                                )}
                               />
+                              <button
+                                type="button"
+                                onClick={() => setClockPickerTask(task)}
+                                title="Analog Clock Selection"
+                                className={cn(
+                                  "p-0.5 rounded transition-all hover:scale-110",
+                                  task.reminderTime 
+                                    ? "text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100" 
+                                    : "text-slate-400 dark:text-zinc-500 hover:text-purple-600 dark:hover:text-purple-300"
+                                )}
+                              >
+                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                              </button>
                             </div>
                             <button
                               onClick={() => deleteTask(task.id)}
-                              className="text-gray-600 hover:text-red-500 p-1 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity"
+                              className="text-gray-400 hover:text-red-500 p-1 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity"
                             >
-                              <Trash2 className="w-2.5 h-2.5" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           </div>
                         </div>
@@ -666,35 +791,17 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-600/5 to-gray-50 dark:from-purple-900/20 dark:to-black border border-gray-200 dark:border-purple-500/20 rounded-3xl p-6 space-y-4 transition-colors">
-            <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-purple-600 dark:text-purple-400">
+          <div className="bg-gradient-to-br from-purple-600/5 to-gray-50 dark:from-purple-900/20 dark:to-black border border-gray-200 dark:border-purple-500/20 rounded-3xl p-5 sm:p-6 space-y-3 sm:space-y-4 transition-colors">
+            <h3 className="text-xs sm:text-sm md:text-base font-black uppercase tracking-wider flex items-center gap-2 text-purple-600 dark:text-purple-400">
               <TrendingUp className="w-4 h-4" />
               Tip
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed italic">
+            <p className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-normal">
               "{systemTip}"
             </p>
           </div>
         </div>
       </div>
-
-      {/* Level Up Notification */}
-      <AnimatePresence>
-        {showLevelUp && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: 100 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 100 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[200] bg-purple-600 text-white px-8 py-4 rounded-2xl shadow-[0_0_50px_rgba(168,85,247,0.8)] border-2 border-white/20 flex items-center gap-4 transition-transform"
-          >
-            <Trophy className="w-8 h-8 animate-bounce" />
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.2em]">Update</div>
-              <div className="text-2xl font-black italic uppercase tracking-tighter">Level Up! Keep it up.</div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* System Toast Message */}
       <AnimatePresence>
@@ -836,15 +943,66 @@ export default function ProjectDetail() {
                             />
                           </div>
                             <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-1.5 bg-purple-500/10 px-2.5 py-1.5 rounded-lg border border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.1)]">
-                                <AlarmClock className={cn("w-4 h-4", task.reminderTime ? "text-purple-400" : "text-gray-600")} />
-                                <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest hidden sm:inline">Alert</span>
+                              <div 
+                                className={cn(
+                                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all",
+                                  task.reminderTime
+                                    ? "bg-purple-100 text-purple-900 border-purple-300 shadow-sm dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/40 dark:shadow-[0_0_12px_rgba(168,85,247,0.2)]"
+                                    : "bg-slate-100/80 text-slate-600 border-slate-200 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 dark:bg-black/40 dark:text-zinc-400 dark:border-purple-500/20 dark:hover:border-purple-500/40 dark:hover:bg-purple-500/10 dark:hover:text-purple-300"
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setClockPickerTask(task)}
+                                  title="Open Theme-Based Analog Clock"
+                                  className="flex items-center gap-1.5 focus:outline-none transition-transform hover:scale-105"
+                                >
+                                  <AlarmClock 
+                                    className={cn(
+                                      "w-4 h-4 transition-colors",
+                                      task.reminderTime 
+                                        ? "text-purple-700 dark:text-purple-300" 
+                                        : "text-slate-500 dark:text-zinc-400"
+                                    )} 
+                                  />
+                                  <span className={cn(
+                                    "text-[10px] font-black uppercase tracking-widest hidden sm:inline transition-colors",
+                                    task.reminderTime
+                                      ? "text-purple-800 dark:text-purple-300"
+                                      : "text-slate-600 dark:text-zinc-400"
+                                  )}>
+                                    Alert
+                                  </span>
+                                  {task.reminderTime && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse inline-block" />
+                                  )}
+                                </button>
                                 <input
                                   type="time"
                                   value={task.reminderTime || ""}
                                   onChange={(e) => updateTaskReminder(task.id, e.target.value || null)}
-                                  className="bg-transparent border-none p-0 text-xs font-bold text-purple-400 focus:ring-0 w-16 cursor-pointer"
+                                  onClick={() => setClockPickerTask(task)}
+                                  title="Click to open theme-based analog clock selection"
+                                  className={cn(
+                                    "bg-transparent border-none p-0 text-xs font-mono font-bold focus:ring-0 w-16 cursor-pointer transition-colors [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none [&::-webkit-calendar-picker-indicator]:!w-0 [&::-webkit-calendar-picker-indicator]:!h-0",
+                                    task.reminderTime
+                                      ? "text-purple-900 dark:text-purple-200"
+                                      : "text-slate-600 dark:text-zinc-400"
+                                  )}
                                 />
+                                <button
+                                  type="button"
+                                  onClick={() => setClockPickerTask(task)}
+                                  title="Analog Clock Selection"
+                                  className={cn(
+                                    "p-0.5 rounded transition-all hover:scale-110",
+                                    task.reminderTime 
+                                      ? "text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100" 
+                                      : "text-slate-400 dark:text-zinc-500 hover:text-purple-600 dark:hover:text-purple-300"
+                                  )}
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <button
                                 onClick={() => deleteTask(task.id)}
@@ -1000,6 +1158,30 @@ export default function ProjectDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Solo Leveling Level Up / Quest Completion Animated Fire Overlay */}
+      <LevelUpOverlay
+        isOpen={showLevelUpModal}
+        onClose={() => setShowLevelUpModal(false)}
+        level={levelUpData.level}
+        previousLevel={levelUpData.previousLevel}
+        questName={levelUpData.questName || project.name}
+        xpGained={levelUpData.xpGained}
+        type={levelUpData.type}
+      />
+
+      {/* Theme-Based Analog Clock Timer Picker */}
+      <AnalogClockPicker
+        isOpen={!!clockPickerTask}
+        initialTime={clockPickerTask?.reminderTime || null}
+        taskTitle={clockPickerTask?.text}
+        onSave={(newTime) => {
+          if (clockPickerTask) {
+            updateTaskReminder(clockPickerTask.id, newTime);
+          }
+        }}
+        onClose={() => setClockPickerTask(null)}
+      />
     </div>
   );
 }

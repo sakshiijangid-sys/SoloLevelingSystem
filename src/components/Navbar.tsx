@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { LayoutDashboard, Trophy, LogOut, LogIn, User } from 'lucide-react';
+import { LogOut, LogIn, User } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 import ThemeToggle from './ThemeToggle';
 
@@ -26,19 +26,14 @@ export default function Navbar() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-purple-500/30 px-3 sm:px-6 py-2 sm:py-4 transition-all duration-300">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)] group-hover:shadow-[0_0_25px_rgba(168,85,247,0.8)] transition-all shrink-0">
-              <Trophy className="text-white w-4 h-4 sm:w-6 sm:h-6" />
-            </div>
-            <span className="text-[10px] sm:text-xl font-bold bg-gradient-to-r from-gray-900 to-purple-600 dark:from-white dark:to-purple-400 bg-clip-text text-transparent tracking-tighter">
+            <span className="text-[7px] xs:text-[9px] sm:text-xs md:text-sm font-normal font-heading bg-gradient-to-r from-gray-900 to-purple-600 dark:from-white dark:to-purple-400 bg-clip-text text-transparent tracking-tight">
               SOLO LEVELING SYSTEM
             </span>
           </Link>
 
-          <div className="flex items-center gap-2 sm:gap-6">
+          <div className="flex items-center gap-2 sm:gap-4">
             {user ? (
               <>
-
-
                 <div className="flex items-center gap-2 sm:gap-4 ml-1">
                   <ThemeToggle />
 
@@ -91,3 +86,4 @@ export default function Navbar() {
     </>
   );
 }
+

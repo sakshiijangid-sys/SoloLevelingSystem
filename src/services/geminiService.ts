@@ -100,45 +100,65 @@ export async function chatWithAI(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const cleanHistory = sanitizeHistory(history);
+    const cleanMessage = message.trim();
+    const isGreeting = /^(hi|hello|hey|greetings|hola|sup|yo|good\s+(morning|afternoon|evening|day))\b[!.?]*$/i.test(cleanMessage);
+
+    const config: any = {
+      systemInstruction: `You are the "Solo Leveling System Oracle", a wise, motivating, and friendly AI guide assisting the user "${userName}".
+
+CRITICAL BEHAVIORAL DIRECTIVES:
+- GREETINGS & CASUAL TALK: When the user greets you (e.g., "hi", "hello", "hey", "how are you", "what's up"), ALWAYS respond warmly with conversational text. Introduce yourself as the System Oracle, ask how you can help them, and NEVER create or invent a quest.
+- TOOL RESTRICTION: You MUST NOT call 'createQuestWithTasks' on greetings or general questions. ONLY call 'createQuestWithTasks' when the user EXPLICITLY asks you to create, generate, or schedule a new quest/habit, and has confirmed the topic and dates.
+
+Your capabilities:
+1. **App Instructions & Guidance**: Explain any feature of the app if asked (Quests, Daily Tasks, XP & Leveling, Stat Radar, Habit Streaks, Calendar view, and Dark/Light mode).
+2. **Learning Roadmaps & Step-by-Step Instructions**: When users ask how to learn or master any topic (coding, fitness, language, cooking, exam prep, etc.), give structured, actionable steps and clear advice.
+3. **Quest & Routine Generation**: Help the user turn their goals into real quests in the system using the 'createQuestWithTasks' tool ONLY when explicitly requested.
+
+Rules for creating Quests:
+- If the user explicitly asks to create a quest or schedule a routine:
+  1. If they haven't mentioned the topic, ask what they'd like to learn.
+  2. Ask for the START DATE (YYYY-MM-DD) and END DATE (YYYY-MM-DD).
+  3. Once you have topic, start date, and end date, call 'createQuestWithTasks'.
+  - Keep quest name short and punchy (3 to 4 words).
+  - Break into clear, bite-sized daily tasks with appropriate reminder times (HH:mm).
+
+Tone:
+- Encouraging, concise, plain English, well-formatted with markdown lists and bold points.
+- Always provide direct answers and clear instructions.`,
+    };
+
+    // Only provide quest creation tools if the user is NOT just saying hello
+    if (!isGreeting) {
+      config.tools = [{ functionDeclarations: [createQuestWithTasksDeclaration] }];
+    }
 
     const chat = ai.chats.create({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: `You are the "Solo Leveling System", a friendly and simple AI assistant that helps people learn new topics and stay organized.
-The person you are helping is named "${userName}".
-Your job is to provide easy-to-follow steps, simple summaries, and helpful tips.
-Avoid complex words or technical jargon. Use clear and plain English.
-
-CRITICAL: If the user wants to start a new quest or learn something new:
-1. First, ask them WHAT topic they want to master if they haven't specified it.
-2. Once they tell you the topic, ask them for the START DATE and the END DATE for this quest.
-3. ONLY after they provide the topic, start date, and end date, use the 'createQuestWithTasks' tool to generate the daily plan.
-
-When using 'createQuestWithTasks':
-- Keep the quest name short and simple, strictly between 3 and 4 words.
-- Break the topic into small, easy daily steps that fit within the time between the start and end date.
-- Set a specific time (HH:mm) for each step so the user knows when to work on it.
-- Keep names and info very simple and encouraging.
-
-After calling the tool, send a final friendly message saying the plan is ready!`,
-        tools: [
-          { functionDeclarations: [createQuestWithTasksDeclaration] }
-        ],
-      },
+      model: "gemini-3.8-flash",
+      config: config,
       history: cleanHistory,
     });
 
     const result = await chat.sendMessage({
-      message: message
+      message: cleanMessage
     });
     
     // Check if the model called a function
     const functionCalls = result.functionCalls;
-    if (functionCalls && functionCalls.length > 0) {
+    if (!isGreeting && functionCalls && functionCalls.length > 0) {
+      const firstCall = functionCalls[0];
+      const questName = (firstCall.args as any)?.questName || "New Quest";
       return {
-        text: result.text || "I have prepared your new quest!",
+        text: result.text || `I have scheduled your new quest **${questName}** with daily tasks added to your quest board! Ready to level up?`,
         functionCalls: functionCalls
       };
+    }
+
+    if (isGreeting) {
+      const reply = result.text && !result.text.includes("prepared your new quest")
+        ? result.text
+        : `Greetings, ${userName}! 🌟 Welcome to the Solo Leveling System. How can I assist you on your journey today? You can ask me for quest advice, learning guides, or how to level up your hunter rank!`;
+      return { text: reply };
     }
 
     return { text: result.text || "Oracle processed your message." };

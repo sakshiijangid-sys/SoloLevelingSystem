@@ -70,9 +70,26 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "role", "text", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User account data including daily login bonuses and streak records.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "lastDailyLoginDate": { "type": "string", "format": "date" },
+        "dailyLoginStreak": { "type": "number" },
+        "totalDailyBonusXP": { "type": "number" },
+        "lastClaimedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and daily login statistics."
+    },
     "/projects/{projectId}": {
       "schema": "Project",
       "description": "User projects."

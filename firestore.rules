@@ -113,7 +113,7 @@ service cloud.firestore {
 
     // Users (PII Isolation)
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read, write: if isOwner(userId);
       
       // Chat History
       match /chatHistory/{messageId} {

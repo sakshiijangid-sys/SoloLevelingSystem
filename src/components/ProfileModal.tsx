@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Trophy, Zap, LogOut, Mail, Calendar, TrendingUp, ChevronDown, ChevronUp, Layers, CheckCircle2, Clock } from 'lucide-react';
+import { X, Trophy, Zap, LogOut, Mail, Calendar, TrendingUp, ChevronDown, ChevronUp, Layers, CheckCircle2, Clock, Flame, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDailyBonus } from '../contexts/DailyBonusContext';
 import { format, subMonths, isSameMonth } from 'date-fns';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -27,6 +28,7 @@ interface ProfileModalProps {
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
+  const { bonusStatus, openBonusModal } = useDailyBonus();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStats, setShowStats] = useState(false);
@@ -237,18 +239,43 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-4 w-full mt-8">
-                  <div className="bg-gray-100 dark:bg-black/40 border border-purple-500/10 p-3 rounded-2xl flex flex-col items-center gap-1 transition-colors">
-                    <Trophy className="w-4 h-4 text-yellow-500" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Quests</span>
-                    <span className="text-sm font-black text-gray-900 dark:text-white">{loading ? '...' : questsCount}</span>
+                <div className="grid grid-cols-2 gap-2.5 w-full mt-6">
+                  <div className="bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-3 rounded-xl flex flex-col items-center gap-0.5 transition-colors">
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Quests</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white font-mono">{loading ? '...' : questsCount}</span>
                   </div>
-                  <div className="bg-gray-100 dark:bg-black/40 border border-purple-500/10 p-3 rounded-2xl flex flex-col items-center gap-1 transition-colors">
-                    <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">XP</span>
-                    <span className="text-sm font-black text-gray-900 dark:text-white">{loading ? '...' : formatXP(totalXP)}</span>
+                  <div className="bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-3 rounded-xl flex flex-col items-center gap-0.5 transition-colors">
+                    <Zap className="w-4 h-4 text-purple-500" />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total XP</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white font-mono">{loading ? '...' : formatXP(totalXP)}</span>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-3 rounded-xl flex flex-col items-center gap-0.5 transition-colors">
+                    <Flame className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Streak</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white font-mono">{bonusStatus.streak || 1} Days</span>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-3 rounded-xl flex flex-col items-center gap-0.5 transition-colors">
+                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Daily Bonus</span>
+                    <span className="text-sm font-bold text-purple-600 dark:text-purple-400 font-mono">+{bonusStatus.todayBonusXP || 50} XP</span>
                   </div>
                 </div>
+
+                {/* Daily Bonus Quick Launcher */}
+                <button
+                  onClick={() => {
+                    onClose();
+                    openBonusModal();
+                  }}
+                  className="w-full mt-3 p-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between text-xs font-semibold text-zinc-800 dark:text-zinc-200 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Flame className="w-3.5 h-3.5 text-amber-500" />
+                    7-Day Streak Rewards
+                  </span>
+                  <span className="text-xs text-purple-600 dark:text-purple-400">View →</span>
+                </button>
 
                 {/* Overall Stats Toggle Section */}
                 <div className="w-full mt-8">

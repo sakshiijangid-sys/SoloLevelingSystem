@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collectionGroup, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collectionGroup, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DailyTask } from '../types';
-import { format, isToday, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
-import { BellRing, Trophy, X, ShieldAlert, AlarmClock, Zap, Hand } from 'lucide-react';
-import RobotIcon from './RobotIcon';
+import { ShieldAlert, Zap, Sparkles } from 'lucide-react';
+import ThreeRobotAlert from './ThreeRobotAlert';
 
 export default function AlarmMonitor() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [activeAlarm, setActiveAlarm] = useState<DailyTask | null>(null);
   const [dismissedAlarms, setDismissedAlarms] = useState<string[]>([]);
+  const [robotReady, setRobotReady] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -35,7 +36,7 @@ export default function AlarmMonitor() {
       console.log(`[ALARM SYSTEM] Monitoring ${activeTasksForToday.length} active reminders for today.`);
       setTasks(activeTasksForToday);
     }, (error) => {
-      console.error("AlarmMonitor collectionGroup query error:", error);
+      console.warn("AlarmMonitor reminder listener status:", error?.message || error);
     });
 
     return () => unsubscribe();
@@ -118,41 +119,23 @@ export default function AlarmMonitor() {
       <AnimatePresence>
         {activeAlarm && (
           <div className="fixed inset-0 z-[3000] flex flex-col md:flex-row items-center md:items-end justify-center md:justify-start p-4 md:p-12 bg-black/95 backdrop-blur-2xl overflow-hidden">
-            {/* Robot "Running" Animation Sequence */}
-            <motion.div
-              initial={{ scale: 0.1, opacity: 0, x: "90vw", y: "20vh" }}
-              animate={{ 
-                scale: [0.1, 0.6, 1.4, 1], 
-                opacity: 1,
-                x: [ "90vw", "50vw", "15vw", "0vw" ],
-                y: [ "20vh", "-10vh", "5vh", "0vh" ],
-              }}
-              transition={{ 
-                duration: 2, 
-                times: [0, 0.4, 0.8, 1],
-                ease: "easeOut",
-              }}
-              className="relative z-[3003] mb-4 md:mb-12"
-            >
-              <div className="relative">
-                {/* Robot Glow */}
-                <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
-                <RobotIcon className="w-40 h-40 md:w-64 md:h-64 relative" />
-                
-                {/* Status Ring */}
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                  className="absolute -inset-2 md:-inset-4 border-2 border-dashed border-purple-500/20 rounded-full" 
+            {/* 3D Three.js Animated Robot Character */}
+            <div className="relative z-[3003] w-full max-w-[340px] md:max-w-[440px] h-[300px] md:h-[420px] flex items-center justify-center shrink-0">
+              <div className="relative w-full h-full">
+                {/* 3D Ambient Aura */}
+                <div className="absolute inset-0 bg-purple-500/25 blur-3xl rounded-full pointer-events-none" />
+                <ThreeRobotAlert 
+                  onAnimationReady={() => setRobotReady(true)} 
+                  className="w-full h-full"
                 />
               </div>
-            </motion.div>
+            </div>
 
             {/* Impact Flash when robot "arrives" */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: [0, 0.4, 0] }}
-              transition={{ delay: 1.2, duration: 0.4 }}
+              transition={{ delay: 1.0, duration: 0.4 }}
               className="absolute inset-0 bg-purple-500 z-[3001] pointer-events-none"
             />
 
@@ -161,8 +144,8 @@ export default function AlarmMonitor() {
               initial={{ scale: 0.8, opacity: 0, x: 20, y: 20 }}
               animate={{ scale: 1, opacity: 1, x: 0, y: 0 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ delay: 1.5, type: "spring", damping: 15 }}
-              className="relative mb-6 md:mb-12 md:ml-6 flex-1 w-full max-w-lg z-[3004]"
+              transition={{ delay: 1.2, type: "spring", damping: 15 }}
+              className="relative mb-6 md:mb-12 md:ml-4 flex-1 w-full max-w-lg z-[3004]"
             >
               <div className="relative bg-zinc-900 border-2 border-purple-500/50 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(168,85,247,0.2)]">
                 {/* Speech Arrow - Responsive placement */}

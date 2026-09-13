@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Project } from '../types';
 import RPGProgressBar from './RPGProgressBar';
-import { Calendar, Zap, ArrowUpRight } from 'lucide-react';
+import { Calendar, ArrowUpRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export interface QuestGalleryProps {
@@ -272,16 +272,10 @@ export default function QuestGallery({
         </div>
       ) : (
         /* Asymmetric Empty Gallery Frame */
-        <div className="text-center py-14 px-4 bg-zinc-50 dark:bg-zinc-950/40 rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-3">
-            <Zap className="w-6 h-6 text-zinc-400 dark:text-zinc-600" />
-          </div>
+        <div className="text-center py-10 px-4 bg-zinc-50 dark:bg-zinc-950/40 rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center">
           <h3 className="text-xs sm:text-sm font-normal text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-heading">
             No Quests in Gallery
           </h3>
-          <p className="text-zinc-500 dark:text-zinc-400 text-xs sm:text-sm mt-1">
-            New entries will appear in this showcase as they are accepted.
-          </p>
         </div>
       )}
     </section>

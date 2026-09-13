@@ -1,7 +1,7 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Zap, Trophy, Shield, Star, LogIn } from 'lucide-react';
+import { Zap, Shield, Star, LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
@@ -74,7 +74,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col items-center justify-center p-6 relative overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col items-center justify-center pt-28 sm:pt-32 pb-12 px-4 sm:px-6 relative overflow-hidden transition-colors duration-300">
       {/* Background Effects */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.15),transparent_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.15),transparent_70%)] pointer-events-none" />
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] animate-pulse" />
@@ -86,15 +86,9 @@ export default function Login() {
         className="max-w-md w-full space-y-8 sm:space-y-12 relative z-10"
       >
         <div className="text-center space-y-3 sm:space-y-4">
-          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-purple-600 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.5)] mb-4 sm:6">
-            <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-          </div>
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase italic bg-gradient-to-b from-gray-900 to-purple-600 dark:from-white dark:to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase italic bg-gradient-to-b from-gray-900 to-purple-600 dark:from-white dark:to-purple-500 bg-clip-text text-transparent mt-6 sm:mt-8 pt-2">
             Solo Leveling System
           </h1>
-          <p className="text-purple-600 dark:text-purple-300 font-mono tracking-widest uppercase text-[10px] sm:text-sm">
-            System Initialization Required
-          </p>
         </div>
 
         <div className="bg-white/80 dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 backdrop-blur-xl space-y-6 sm:space-y-8 shadow-2xl transition-colors">

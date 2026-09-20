@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Use environment variables if available, otherwise fallback to firebase-applet-config.json
@@ -15,20 +19,14 @@ const config = {
 
 const app = initializeApp(config);
 
-// Connect directly to the provisioned database without forcing slow long-polling
+// Connect to the provisioned database with persistent local caching and auto long-polling fallback
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
-export const db = getFirestore(app, databaseId);
-export const auth = getAuth(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  }),
+  experimentalAutoDetectLongPolling: true,
+}, databaseId);
 
-// Connection test helper per guidelines
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firebase client operating in offline mode.");
-    }
-  }
-}
-testConnection();
+export const auth = getAuth(app);
 

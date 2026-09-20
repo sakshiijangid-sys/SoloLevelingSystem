@@ -35,13 +35,15 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 function AppContent() {
+  const { user } = useAuth();
+
   return (
     <Router>
       <div className="min-h-screen transition-colors duration-300 bg-white dark:bg-black text-gray-900 dark:text-white selection:bg-purple-500/30 selection:text-purple-200">
         <Navbar />
         <AIChatbot />
         <AlarmMonitor />
-        <DailyBonusModal />
+        {user && user.uid && <DailyBonusModal />}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />

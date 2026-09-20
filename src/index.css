@@ -90,15 +90,15 @@
   .markdown-body strong { @apply font-bold text-purple-600 dark:text-purple-400; }
   .markdown-body blockquote { @apply border-l-4 border-purple-500 pl-4 italic my-4 text-gray-600 dark:text-gray-400; }
 
-  /* Custom Scrollbar */
+  /* Hide right-side vertical scrollbar slider while retaining smooth scrolling */
+  html, body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
   ::-webkit-scrollbar {
-    width: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-black;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-purple-200 dark:bg-purple-900/50 rounded-full border-2 border-gray-100 dark:border-black hover:bg-purple-300 dark:hover:bg-purple-800/50 transition-colors;
+    display: none;
+    width: 0px;
+    height: 0px;
   }
 
   /* Hide native browser clock/calendar picker indicator in time inputs */

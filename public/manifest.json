@@ -1,0 +1,24 @@
+{
+  "name": "Solo Leveling System",
+  "short_name": "Solo Leveling",
+  "description": "Solo Leveling System - Track your hunter quests, level up, and unlock rewards with full-screen standalone interface.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#9333ea",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

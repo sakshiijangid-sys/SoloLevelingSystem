@@ -2,11 +2,18 @@ import React, { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flame, Sparkles, X, Check, ArrowRight } from 'lucide-react';
 import { useDailyBonus, calculateDailyBonusXP } from '../contexts/DailyBonusContext';
+import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { playDailyBonusSound } from '../lib/soundEffects';
 
 export default function DailyBonusModal() {
+  const { user } = useAuth();
   const { bonusStatus, showModal, setShowModal, claimBonus } = useDailyBonus();
+
+  // If there is no current login id, do not show or render the daily bonus modal
+  if (!user || !user.uid) {
+    return null;
+  }
 
   const streak = bonusStatus.streak || 1;
   const todayXP = bonusStatus.todayBonusXP || calculateDailyBonusXP(streak);

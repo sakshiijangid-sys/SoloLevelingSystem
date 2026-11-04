@@ -23,7 +23,7 @@ const ai = new GoogleGenAI({
   },
 });
 
-const MODELS = ['gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
 const createQuestWithTasksDeclaration: FunctionDeclaration = {
   name: "createQuestWithTasks",
@@ -161,7 +161,8 @@ Tone:
 - Always provide direct answers and clear instructions.`,
     };
 
-    if (!isGreeting) {
+    const isQuestCreationIntent = !isGreeting && /(create|schedule|add|make|plan|start|generate|setup|set up)\s+(a\s+)?(new\s+)?(quest|routine|task|project|habit|goal)/i.test(cleanMessage);
+    if (isQuestCreationIntent) {
       config.tools = [{ functionDeclarations: [createQuestWithTasksDeclaration] }];
     }
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation } from 'react-router-dom';
-import { X, Send, Sparkles, User, Loader2, Globe, History, ChevronLeft, Calendar, Zap, Sword, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Send, Sparkles, User, Loader2, Globe, History, ChevronLeft, Calendar, Zap, Sword, AlertCircle, Trash2, RotateCcw } from 'lucide-react';
 import RobotIcon from './RobotIcon';
 import { chatWithAI } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,19 @@ import { cn } from '../lib/utils';
 import { collection, query, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns';
+
+const isErrorText = (text: string) => 
+  text.startsWith('⚠️') ||
+  text.startsWith('⚡') ||
+  text.startsWith('⏳') ||
+  text.includes('Oracle Connection Notice') ||
+  text.includes('Oracle Connection Configuration') ||
+  text.includes('Oracle Key Required') ||
+  text.includes('Oracle Cooldown') ||
+  text.includes('Communication Signal Mismatch') ||
+  text.includes('Forgive me, the magical connection is weak') ||
+  text.includes('high demand') ||
+  text.includes('{"error"');
 
 interface Message {
   role: 'user' | 'model';
@@ -45,6 +58,7 @@ export default function AIChatbot() {
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [showTooltip, setShowTooltip] = useState(true);
   const [input, setInput] = useState('');
+  const [lastUserPrompt, setLastUserPrompt] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [view, setView] = useState<'chat' | 'history'>('chat');
   const [isLoading, setIsLoading] = useState(false);
@@ -131,11 +145,13 @@ export default function AIChatbot() {
         const history: Message[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          history.push({
-            role: data.role as 'user' | 'model',
-            text: data.text,
-            createdAt: data.createdAt
-          });
+          if (data.text && !isErrorText(data.text)) {
+            history.push({
+              role: data.role as 'user' | 'model',
+              text: data.text,
+              createdAt: data.createdAt
+            });
+          }
         });
         
         if (history.length > 0) {
@@ -255,6 +271,8 @@ export default function AIChatbot() {
     const chatPath = `users/${user.uid}/chatHistory`;
     
     if (!forcedMessage) setInput('');
+    setLastUserPrompt(userMessage);
+
     const newUserMsg: Message = { role: 'user', text: userMessage };
     setMessages(prev => [...prev, newUserMsg]);
     setIsLoading(true);
@@ -272,9 +290,9 @@ export default function AIChatbot() {
         console.error("Failed to save user message:", e);
       }
 
-      // Filter out error strings and non-dialogue system messages from LLM history
+      // Filter out error strings, notices, and raw error JSON from LLM history
       const history = messages
-        .filter(m => !m.text.includes("Oracle Connection Configuration") && !m.text.includes("Forgive me, the magical connection is weak"))
+        .filter(m => !isErrorText(m.text))
         .map(m => ({
           role: m.role,
           parts: [{ text: m.text }]
@@ -361,10 +379,12 @@ export default function AIChatbot() {
         errorMsg = "⚠️ **Oracle Key Required**\n\nThe Gemini API Key is missing or invalid. Please check your environment variables.";
       } else if (errString.includes("429") || errString.includes("RESOURCE_EXHAUSTED") || errString.includes("quota")) {
         errorMsg = "⏳ **Oracle Cooldown**\n\nThe AI quota limit was temporarily reached. Please wait a few moments and try your request again.";
+      } else if (errString.includes("503") || errString.includes("high demand") || errString.includes("UNAVAILABLE")) {
+        errorMsg = "⚡ **High Demand Spike**\n\nThe AI Oracle is temporarily experiencing high traffic. Please tap **Retry Question** below.";
       } else if (errString.includes("400") || errString.includes("INVALID_ARGUMENT")) {
         errorMsg = "⚠️ **Communication Signal Mismatch**\n\nThe message history was reset. Please try sending your request again.";
       } else {
-        errorMsg = `⚠️ **Oracle Connection Notice**\n\n${errString.slice(0, 150)}`;
+        errorMsg = `⚠️ **Oracle Connection Notice**\n\nCould not reach the assistant. Please try your question again.`;
       }
       
       setMessages(prev => [...prev, { role: 'model', text: errorMsg }]);
@@ -496,6 +516,17 @@ export default function AIChatbot() {
                                   <div className={cn("markdown-body prose prose-sm max-w-none transition-colors", m.role === 'model' ? "dark:prose-invert" : "prose-invert")}>
                                     <Markdown>{m.text}</Markdown>
                                   </div>
+                                  {m.role === 'model' && isErrorText(m.text) && lastUserPrompt && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSend(lastUserPrompt)}
+                                      disabled={isLoading}
+                                      className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-semibold text-xs border border-purple-500/30 transition-colors cursor-pointer"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                      <span>Retry Question</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             );

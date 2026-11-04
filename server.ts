@@ -23,7 +23,7 @@ const ai = new GoogleGenAI({
   },
 });
 
-const MODELS = ['gemini-3-flash-preview', 'gemini-3.8-flash'];
+const MODELS = ['gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
 const createQuestWithTasksDeclaration: FunctionDeclaration = {
   name: "createQuestWithTasks",
@@ -68,7 +68,26 @@ const createQuestWithTasksDeclaration: FunctionDeclaration = {
 function sanitizeHistory(rawHistory: { role: 'user' | 'model', parts: { text: string }[] }[] = []) {
   const filtered = (rawHistory || []).filter(item => {
     const text = item.parts?.[0]?.text?.trim();
-    return Boolean(text);
+    if (!text) return false;
+    // Strip error notices, system alerts, or connection notices
+    if (
+      text.startsWith('⚠️') ||
+      text.startsWith('⚡') ||
+      text.startsWith('⏳') ||
+      text.includes('Oracle Connection Notice') ||
+      text.includes('Oracle Connection Configuration') ||
+      text.includes('Oracle Key Required') ||
+      text.includes('Oracle Cooldown') ||
+      text.includes('Communication Signal Mismatch') ||
+      text.includes('Forgive me, the magical connection is weak') ||
+      text.includes('This model is currently experiencing high demand') ||
+      text.includes('{"error"') ||
+      text.includes('"code":503') ||
+      text.includes('"code":429')
+    ) {
+      return false;
+    }
+    return true;
   });
 
   while (filtered.length > 0 && filtered[0].role !== 'user') {
@@ -87,6 +106,12 @@ function sanitizeHistory(rawHistory: { role: 'user' | 'model', parts: { text: st
         cleaned.push({ role: item.role, parts: [{ text: item.parts[0].text }] });
       }
     }
+  }
+
+  // Ensure history ends with a model message if history is not empty.
+  // When chat.sendMessage is called, that is the subsequent user turn.
+  if (cleaned.length > 0 && cleaned[cleaned.length - 1].role === 'user') {
+    cleaned.pop();
   }
 
   return cleaned;
@@ -120,7 +145,7 @@ CRITICAL BEHAVIORAL DIRECTIVES:
 
 Your capabilities:
 1. **App Instructions & Guidance**: Explain any feature of the app if asked (Quests, Daily Tasks, XP & Leveling, Stat Radar, Habit Streaks, Calendar view, and Dark/Light mode).
-2. **Learning Roadmaps & Step-by-Step Instructions**: When users ask how to learn or master any topic (coding, fitness, language, cooking, exam prep, etc.), give structured, actionable steps and clear advice.
+2. **Learning Roadmaps & Step-by-Step Instructions**: When users ask how to learn or master any topic (coding, fitness, language, cooking, exam prep, CBSE syllabus, etc.), give structured, actionable steps and clear advice.
 3. **Quest & Routine Generation**: Help the user turn their goals into real quests in the system using the 'createQuestWithTasks' tool ONLY when explicitly requested.
 
 Rules for creating Quests:
@@ -140,10 +165,12 @@ Tone:
       config.tools = [{ functionDeclarations: [createQuestWithTasksDeclaration] }];
     }
 
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     let lastError: any = null;
     let result: any = null;
 
     for (const model of MODELS) {
+      // 1. Attempt with standard configuration (including tools if applicable)
       try {
         const chat = ai.chats.create({
           model: model,
@@ -154,10 +181,37 @@ Tone:
         result = await chat.sendMessage({
           message: cleanMessage,
         });
-        if (result) break;
+        if (result && (result.text || (result.functionCalls && result.functionCalls.length > 0))) {
+          break;
+        }
       } catch (err: any) {
         lastError = err;
-        console.warn(`Model ${model} request failed, attempting fallback if available:`, err?.message || err);
+        const errMsg = err?.message || String(err);
+        console.warn(`Model ${model} with tools failed:`, errMsg);
+
+        // If tools caused a high-demand 503 or error, immediately retry without tools so questions get answered
+        if (config.tools) {
+          try {
+            await sleep(350);
+            const noToolConfig = { ...config };
+            delete noToolConfig.tools;
+            const plainChat = ai.chats.create({
+              model: model,
+              config: noToolConfig,
+              history: cleanHistory,
+            });
+            result = await plainChat.sendMessage({
+              message: cleanMessage,
+            });
+            if (result && result.text) {
+              break;
+            }
+          } catch (plainErr: any) {
+            lastError = plainErr;
+            console.warn(`Model ${model} plain text fallback failed:`, plainErr?.message || plainErr);
+          }
+        }
+        await sleep(400);
       }
     }
 
@@ -185,8 +239,16 @@ Tone:
     return res.json({ text: result.text || 'Oracle processed your message.' });
   } catch (error: any) {
     console.error('Server Gemini Error:', error);
-    const message = error?.message || 'Error communicating with Gemini Oracle';
-    return res.status(500).json({ error: message });
+    const rawMsg = error?.message || String(error || '');
+    let userFriendlyMsg = 'The AI Oracle is currently experiencing temporary high demand. Please try asking again in a few moments.';
+    if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('API key not valid') || rawMsg.includes('403')) {
+      userFriendlyMsg = 'The Gemini API key is missing or invalid. Please check the server configuration.';
+    } else if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED')) {
+      userFriendlyMsg = 'The AI quota was temporarily reached. Please wait a moment and try again.';
+    } else if (rawMsg.includes('400') || rawMsg.includes('INVALID_ARGUMENT')) {
+      userFriendlyMsg = 'Signal mismatch with the Oracle. Please try asking your question again.';
+    }
+    return res.status(500).json({ error: userFriendlyMsg });
   }
 });
 

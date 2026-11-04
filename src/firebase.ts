@@ -19,14 +19,24 @@ const config = {
 
 const app = initializeApp(config);
 
-// Connect to the provisioned database with persistent local caching and auto long-polling fallback
+// Connect to the provisioned database with forced long-polling to prevent 10s WebChannel timeout in proxy/iframe environments
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  }),
-  experimentalAutoDetectLongPolling: true,
-}, databaseId);
+
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    }),
+  }, databaseId);
+} catch {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  }, databaseId);
+}
+
+export const db = firestoreInstance;
 
 export const auth = getAuth(app);
 

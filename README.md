@@ -1,45 +1,18 @@
-It is a useful website for users which are trying to understand elections and are first time voters.
+a gamified project & task management platform designed with a high-contrast, modern asymmetric aesthetic and responsive tactile interactions.
+Traditional to-do apps track checklists. We turn real-world projects into dungeons, tasks into quests, and consistency into tangible hunter ranks.
 
-# Tech Stack
+# Core Features -
 
-Frontend: Built with React 18 and TypeScript for a robust, type-safe user experience.
+🎮 RPG Leveling & Rank Matrix: Complete tasks to earn XP, trigger rank ascensions from E-Rank to National Rank, and unlock dynamic hunter stat boosts.
+📅 Daily Login Streak & Bonus XP: Built-in daily reward engine that grants streak XP bonuses strictly once per calendar day to cement positive habits.
+🤖 AI Dungeon Assistant: Integrated intelligent breakdown tools to turn overwhelming projects into bite-sized actionable questlines with estimated XP rewards.
+📊 Hunter Stats & Activity Visualizers: Interactive radar metrics for Strength, Agility, and Discipline, paired with activity charts tracking your daily productivity velocity.
+🌓 Dynamic Asymmetric Themes: Seamless dark mode and warm modern light palette with cybernetic rift emitters and reactive audio chimes.
 
-Styling: Powered by Tailwind CSS for a modern, responsive, and high-performance "vibrant-minimalist" design.
+# Fluid Gestures & Micro-Interactions -
 
-Animations: Utilizes Framer Motion (motion/react) for smooth transitions, staggered entrances, and the unique swiveling roadmap path.
+📱 3D Device Perspective Gyro & Tilt: An interactive real-time 3D mobile mockup responding directly to mouse cursor dynamics, pointer coordinates, and touch angles.
+👆 Tactile Quick-Taps & Check Animations: Smooth milestone ticks featuring synthesized Web Audio chimes and particle bursts on completion.
+🎚️ Interactive Quest Drawer & Filter Swipes: Effortless filtering across priority tags, categories, and dungeon statuses with responsive motion springs.
+⚡ Haptic Rank-Up Ascension Overlays: Full-screen level-up triggers when clearing project thresholds with celebratory visual ripples.
 
-Backend & Auth: Integrated with Firebase (Auth & Firestore) for real-time progress saving, XP tracking, and secure user profiles.
-
-Visuals: Uses Lucide React for consistent iconography and Recharts for data-driven election simulations.
-
-## UI/UX Features
-
-Swirl Path Navigation: A unique, game-like vertical timeline that turns learning levels into a visual journey.
-
-XP & Achievement System: Instant feedback with XP rewards and real-time badge awarding (e.g., "Ballot Master", "Global Envoy").
-
-Interactive Learning: Modular lessons with built-in quizzes and logic-gate progression.
-
-Election Simulator: A visual sandbox where users can see how voter turnout and bias impact election results.
-
-Fully Responsive: A "Desktop-First Precision" design that adapts seamlessly to mobile devices for learning on the go.
-
-## Problems It Solves
-
-Civic Illiteracy: Simplifies complex democratic concepts into bite-sized, digestible modules.
-
-Voter Apathy: Engages younger audiences by gamifying the learning experience and showing the direct impact of a single vote.
-
-Information Overload: Provides a structured, linear path to understanding rights, registry steps, and election timelines.
-
-Misinformation: Educates users on factual democratic processes and the importance of being an "informed citizen."
-
-## Why Election Explorer?
-
-It’s Empowering: It transforms the passive act of reading into an active experience of "mastering" democracy.
-
-It’s Transparent: By simulating elections, it demystifies how winners are actually calculated and how systems differ globally.
-
-It’s Collaborative: Built to support real-time data, ensuring users can compete for XP and showcase their "Civics Scholar" status.
-
-It’s Future-Ready: Scalable infrastructure allows for the addition of new levels as election laws evolve.

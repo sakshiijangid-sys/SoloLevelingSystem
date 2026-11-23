@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Project } from '../types';
 import RPGProgressBar from './RPGProgressBar';
@@ -39,7 +39,7 @@ export function getRankBadge(progress: number, type: 'active' | 'finished' | 'un
   return { rank: 'E-RANK', label: 'NOVICE', color: 'from-zinc-500 to-zinc-600 text-white border-zinc-400' };
 }
 
-export function QuestGalleryCard({
+export const QuestGalleryCard = memo(function QuestGalleryCard({
   project,
   type,
   index,
@@ -172,7 +172,7 @@ export function QuestGalleryCard({
       </div>
     </motion.div>
   );
-}
+});
 
 export default function QuestGallery({
   title,

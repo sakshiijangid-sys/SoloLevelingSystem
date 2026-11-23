@@ -1,10 +1,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { 
   User, 
-  onAuthStateChanged, 
+  onIdTokenChanged,
+  type IdTokenResult,
   signInWithPopup, 
   signInWithRedirect,
   getRedirectResult,
+  getMultiFactorResolver,
+  type MultiFactorResolver,
   signInWithCredential,
   GoogleAuthProvider, 
   signOut as firebaseSignOut,
@@ -22,6 +25,8 @@ declare global {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  redirectResolver?: MultiFactorResolver;
+  claims: IdTokenResult['claims'] | null;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -31,29 +36,94 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [redirectResolver, setRedirectResolver] = useState<MultiFactorResolver>();
+  const [claims, setClaims] = useState<IdTokenResult['claims'] | null>(null);
 
   useEffect(() => {
-    // Force local persistence to help mobile WebViews
-    setPersistence(auth, browserLocalPersistence);
-
-    console.log("Firebase Auth Domain:", auth.config.authDomain);
-    
-    // Handle the result of a redirect login (important for mobile)
-    getRedirectResult(auth).then((result) => {
-      if (result?.user) {
-        console.log("Redirect login successful:", result.user.email);
+    void setPersistence(auth, browserLocalPersistence).catch(console.error);
+    void getRedirectResult(auth).catch(error => {
+      if (error.code === 'auth/multi-factor-auth-required') {
+        setRedirectResolver(getMultiFactorResolver(auth, error));
+      } else {
+        console.error('Redirect sign-in failed:', error);
       }
-    }).catch((error) => {
-      console.error("Redirect login error:", error);
     });
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
+    let version = 0;
+    const unsubscribe = onIdTokenChanged(auth, async current => {
+      const latest = ++version;
+      setUser(current);
+      setClaims(null);
+      try {
+        const token = await current?.getIdTokenResult();
+        if (latest === version) setClaims(token?.claims ?? null);
+      } catch {
+        if (latest === version) setClaims(null);
+      } finally {
+        if (latest === version) setLoading(false);
+      }
     });
-
-    return () => unsubscribe();
+    return () => {
+      version++;
+      unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const idleLimit = 30 * 60_000;
+    const key = `solo_leveling_last_activity_${user.uid}`;
+    let lastActivity = Date.now();
+    let timer: ReturnType<typeof setTimeout>;
+    const readActivity = () => {
+      try {
+        const stored = Number(localStorage.getItem(key));
+        if (stored > 0 && stored <= Date.now()) lastActivity = Math.max(stored, lastActivity);
+      } catch {
+        // In-memory timeout still applies.
+      }
+    };
+    try {
+      const stored = Number(localStorage.getItem(key));
+      const lastSignIn = Date.parse(user.metadata.lastSignInTime ?? '');
+      if (stored > 0 && stored <= lastActivity && stored >= lastSignIn) lastActivity = stored;
+    } catch {
+      // In-memory timeout still applies.
+    }
+    const check = () => {
+      readActivity();
+      clearTimeout(timer);
+      const remaining = idleLimit - (Date.now() - lastActivity);
+      if (remaining <= 0) {
+        if (auth.currentUser?.uid === user.uid) void firebaseSignOut(auth).catch(console.error);
+        return false;
+      }
+      timer = setTimeout(check, remaining);
+      return true;
+    };
+    const activity = () => {
+      if (!check()) return;
+      if (Date.now() - lastActivity < 1000) return;
+      lastActivity = Date.now();
+      try {
+        localStorage.setItem(key, String(lastActivity));
+      } catch {
+        // In-memory timeout still applies.
+      }
+      check();
+    };
+    const events = ['pointerdown', 'keydown', 'scroll'] as const;
+    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('storage', check);
+    check();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(event => window.removeEventListener(event, activity));
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('storage', check);
+    };
+  }, [user?.uid]);
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
@@ -94,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await signInWithPopup(auth, provider);
         } catch (popupError: any) {
+          if (popupError.code === 'auth/multi-factor-auth-required') throw popupError;
           console.warn("Popup failed in WebView, trying redirect...", popupError);
           // If popup blocked or failed, fall back to redirect ONLY as last resort
           await signInWithRedirect(auth, provider);
@@ -120,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, claims, redirectResolver, signInWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -54,6 +54,7 @@ export default function Navbar() {
                       </div>
                     )}
                   </button>
+                  <Link to="/account" className="text-sm hover:text-purple-500">Account</Link>
                   <button 
                     onClick={handleLogout}
                     className="text-gray-400 hover:text-red-400 transition-colors"

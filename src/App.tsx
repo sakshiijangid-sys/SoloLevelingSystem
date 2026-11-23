@@ -7,12 +7,31 @@ import AIChatbot from './components/AIChatbot';
 import AlarmMonitor from './components/AlarmMonitor';
 import DailyBonusModal from './components/DailyBonusModal';
 import Home from './pages/Home';
-import ProjectDetail from './pages/ProjectDetail';
-import NewProject from './pages/NewProject';
-import Report from './pages/Report';
+
+
+
 import Login from './pages/Login';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
+
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const NewProject = lazy(() => import('./pages/NewProject'));
+const Report = lazy(() => import('./pages/Report'));
+const TodayTasks = lazy(() => import('./pages/TodayTasks'));
+const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
+
+function QuestScreen({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return (
+    <ProtectedRoute>
+      <ErrorBoundary key={pathname} feature="Quest">
+        <Suspense fallback={<p role="status" className="pt-24 text-center">Loading…</p>}>
+          {children}
+        </Suspense>
+      </ErrorBoundary>
+    </ProtectedRoute>
+  );
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -41,36 +60,40 @@ function AppContent() {
     <Router>
       <div className="min-h-screen transition-colors duration-300 bg-white dark:bg-black text-gray-900 dark:text-white selection:bg-purple-500/30 selection:text-purple-200">
         <Navbar />
-        <AIChatbot />
-        <AlarmMonitor />
+        <ErrorBoundary feature="Chat"><AIChatbot /></ErrorBoundary>
+        <ErrorBoundary feature="Alarm"><AlarmMonitor /></ErrorBoundary>
         {user && user.uid && <DailyBonusModal />}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<ErrorBoundary feature="Sign-in"><Login /></ErrorBoundary>} />
           <Route 
             path="/project/:id" 
             element={
-              <ProtectedRoute>
-                <ProjectDetail />
-              </ProtectedRoute>
+              <QuestScreen><ProjectDetail /></QuestScreen>
             } 
           />
           <Route 
             path="/new-project" 
             element={
-              <ProtectedRoute>
-                <NewProject />
-              </ProtectedRoute>
+              <QuestScreen><NewProject /></QuestScreen>
             } 
           />
           <Route 
             path="/project/:id/report/:month" 
             element={
-              <ProtectedRoute>
-                <Report />
-              </ProtectedRoute>
+              <QuestScreen><Report /></QuestScreen>
             } 
           />
+          <Route path="/today" element={<QuestScreen><TodayTasks /></QuestScreen>} />
+          <Route path="/account" element={
+            <ProtectedRoute>
+              <ErrorBoundary feature="Account security">
+                <Suspense fallback={<p role="status" className="pt-24 text-center">Loading…</p>}>
+                  <AccountSecurity />
+                </Suspense>
+              </ErrorBoundary>
+            </ProtectedRoute>
+          } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

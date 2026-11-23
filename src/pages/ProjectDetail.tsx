@@ -1,3 +1,4 @@
+import { dailyCheckWrite, dailyTaskChanges, dailyTaskWrite, documentId, projectProgress } from '../lib/firestoreSchemas';
 import { useState, useEffect, FormEvent, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -5,7 +6,7 @@ import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, getDocs, 
 import { db } from '../firebase';
 import { Project, DailyCheck, DailyTask } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
-import { GoogleGenAI } from "@google/genai";
+import { chatWithAI } from '../services/geminiService';
 
 import RPGProgressBar from '../components/RPGProgressBar';
 import QuestLevelList, { calculateQuestLevel, getQuestLevelDetails, QUEST_LEVEL_MILESTONES } from '../components/QuestLevelList';
@@ -38,7 +39,8 @@ import { cn } from '../lib/utils';
 import { playLevelUpSound, playProjectCompleteSound, playTaskCheckSound } from '../lib/soundEffects';
 
 export default function ProjectDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id: rawId } = useParams<{ id: string }>();
+  const id = documentId.safeParse(rawId).data;
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
@@ -98,7 +100,8 @@ export default function ProjectDetail() {
   }, [dailyTasks]);
 
   useEffect(() => {
-    if (authLoading || !id || !user) return;
+    if (authLoading || !user) return;
+    if (!id) { navigate('/'); return; }
 
     const unsubProject = onSnapshot(doc(db, 'projects', id), (docSnap) => {
       if (docSnap.exists()) {
@@ -164,28 +167,9 @@ export default function ProjectDetail() {
     ];
 
     const generateTip = async () => {
-      // Check if a usable Gemini API key is configured
-      const key =
-        (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-        '';
-
-      if (!key || key === 'MY_GEMINI_API_KEY') {
-        // Use a curated quest tip if no key is configured
-        const randomTip = questTips[Math.floor(Math.random() * questTips.length)];
-        setSystemTip(randomTip);
-        return;
-      }
-
       setIsGeneratingTip(true);
       try {
-        const ai = new GoogleGenAI({ apiKey: key });
-        const prompt = `You are a helpful and simple assistant. Give one short, friendly, and very simple tip for someone working on a quest called "${project.name}". Use very simple words. No jargon. Do not use quotes. Max 15 words.`;
-        
-        const response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: prompt,
-        });
+        const response = await chatWithAI(project.name, [], user?.displayName || 'Adventurer', 'tip');
 
         if (response?.text) {
           setSystemTip(response.text.trim().replace(/^["']|["']$/g, ''));
@@ -261,7 +245,7 @@ export default function ProjectDetail() {
 
     try {
       const finalDate = dateStr || format(new Date(), 'yyyy-MM-dd');
-      await addDoc(collection(db, 'projects', id, 'dailyTasks'), {
+      await addDoc(collection(db, 'projects', id, 'dailyTasks'), dailyTaskWrite.parse({
         projectId: id,
         userId: user.uid,
         text: textToUse,
@@ -270,7 +254,7 @@ export default function ProjectDetail() {
         date: finalDate,
         reminderTime: reminderTime || null,
         projectName: project.name
-      });
+      }));
       if (!taskText) setNewTaskText('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `projects/${id}/dailyTasks`);
@@ -296,9 +280,9 @@ export default function ProjectDetail() {
       if (willBeCompleted) {
         playTaskCheckSound();
       }
-      await updateDoc(doc(db, 'projects', id, 'dailyTasks', task.id), {
+      await updateDoc(doc(db, 'projects', id, 'dailyTasks', task.id), dailyTaskChanges.parse({
         completed: willBeCompleted
-      });
+      }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `projects/${id}/dailyTasks/${task.id}`);
     }
@@ -316,9 +300,9 @@ export default function ProjectDetail() {
   const editTask = async (taskId: string, newText: string) => {
     if (!id || !newText.trim() || isLocked) return;
     try {
-      await updateDoc(doc(db, 'projects', id, 'dailyTasks', taskId), {
+      await updateDoc(doc(db, 'projects', id, 'dailyTasks', taskId), dailyTaskChanges.parse({
         text: newText.trim()
-      });
+      }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `projects/${id}/dailyTasks/${taskId}`);
     }
@@ -327,11 +311,10 @@ export default function ProjectDetail() {
   const updateTaskReminder = async (taskId: string, time: string | null) => {
     if (!id || isLocked) return;
     try {
-      await updateDoc(doc(db, 'projects', id, 'dailyTasks', taskId), {
+      await updateDoc(doc(db, 'projects', id, 'dailyTasks', taskId), dailyTaskChanges.parse({
         reminderTime: time,
-        userId: user?.uid, // Ensure userId is present on update too
         projectName: project.name
-      });
+      }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `projects/${id}/dailyTasks/${taskId}`);
     }
@@ -361,20 +344,20 @@ export default function ProjectDetail() {
         // 3 levels in one quest: triggers on 40% > level 1, 70% > level 2, 100% > level 3
         const newLevel = calculateQuestLevel(newProgress);
         
-        await updateDoc(doc(db, 'projects', id), {
+        await updateDoc(doc(db, 'projects', id), projectProgress.parse({
           progress: newProgress,
           xp: newXP,
           level: newLevel,
           status: newProgress >= 100 ? 'completed' : 'active',
           completedAt: null // Reset if removed
-        });
+        }));
       } else {
-        await addDoc(collection(db, 'dailyChecks'), {
+        await addDoc(collection(db, 'dailyChecks'), dailyCheckWrite.parse({
           projectId: id,
           userId: user.uid,
           date: dateStr,
           completed: true
-        });
+        }));
 
         playTaskCheckSound();
         
@@ -409,13 +392,13 @@ export default function ProjectDetail() {
           setShowLevelUpModal(true);
         }
 
-        await updateDoc(doc(db, 'projects', id), {
+        await updateDoc(doc(db, 'projects', id), projectProgress.parse({
           progress: newProgress,
           xp: newXP,
           level: newLevel,
           status: newProgress >= 100 ? 'completed' : 'active',
           completedAt: newProgress >= 100 ? serverTimestamp() : null
-        });
+        }));
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${id} or dailyChecks`);

@@ -1,3 +1,4 @@
+import { reportChanges, reportWrite } from '../lib/firestoreSchemas';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,9 +63,9 @@ export default function Report() {
 
       if (needsUpdate) {
         try {
-          await updateDoc(doc(db, 'monthlyReports', report.id), {
+          await updateDoc(doc(db, 'monthlyReports', report.id), reportChanges.parse({
             levels: updatedLevels
-          });
+          }));
         } catch (error) {
           console.error("Error syncing report with level:", error);
         }
@@ -114,12 +115,12 @@ export default function Report() {
           });
         }
 
-        setDoc(doc(db, 'monthlyReports', reportId), {
+        setDoc(doc(db, 'monthlyReports', reportId), reportWrite.parse({
           projectId: id,
           month,
           levels: initialLevels,
           summary: `Monthly progress report for ${month}`
-        }).catch(err => handleFirestoreError(err, OperationType.CREATE, `monthlyReports/${reportId}`));
+        })).catch(err => handleFirestoreError(err, OperationType.CREATE, `monthlyReports/${reportId}`));
       }
       setLoading(false);
     }, (error) => {

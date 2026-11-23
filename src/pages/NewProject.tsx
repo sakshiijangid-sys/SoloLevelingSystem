@@ -1,3 +1,4 @@
+import { projectWrite } from '../lib/firestoreSchemas';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +26,7 @@ export default function NewProject() {
 
     setLoading(true);
     try {
-      await addDoc(collection(db, 'projects'), {
+      await addDoc(collection(db, 'projects'), projectWrite.parse({
         ...formData,
         userId: user.uid,
         progress: 0,
@@ -33,7 +34,7 @@ export default function NewProject() {
         level: 1,
         status: 'active',
         createdAt: serverTimestamp(),
-      });
+      }));
       navigate('/');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'projects');

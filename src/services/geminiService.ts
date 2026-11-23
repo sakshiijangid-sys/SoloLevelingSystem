@@ -1,3 +1,5 @@
+import { auth } from '../firebase';
+
 export interface ChatMessagePart {
   text: string;
 }
@@ -20,18 +22,26 @@ export interface ChatResponse {
 export async function chatWithAI(
   message: string, 
   history: ChatHistoryItem[] = [], 
-  userName: string = "Adventurer"
+  userName: string = "Adventurer",
+  mode: 'chat' | 'tip' = 'chat'
 ): Promise<ChatResponse> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to continue.');
+  const token = await user.getIdToken();
   let response: Response;
   try {
     response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         message,
-        history,
+        history: history.slice(-20).map(item => ({
+          ...item, parts: [{ text: (item.parts[0]?.text ?? '').slice(0, 8000) }],
+        })),
+        mode,
         userName,
       }),
     });

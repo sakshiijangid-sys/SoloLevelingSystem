@@ -1,25 +1,93 @@
-a gamified project & task management platform designed with a high-contrast, modern asymmetric aesthetic and responsive tactile interactions.
-Traditional to-do apps track checklists. We turn real-world projects into dungeons, tasks into quests, and consistency into tangible hunter ranks.
+# Solo Leveling System
 
-# Core Features -
+![Solo Leveling System](https://raw.githubusercontent.com/rriyansh/SoloLevelingSystem/main/public/favicon.png)
 
-🎮 RPG Leveling & Rank Matrix: Complete tasks to earn XP, trigger rank ascensions from E-Rank to National Rank, and unlock dynamic hunter stat boosts.
+Solo Leveling System is a gamified productivity app that turns personal goals into quests. Create projects, complete daily tasks, earn XP, build streaks, and track your progress through a hunter-style ranking system.
 
-📅 Daily Login Streak & Bonus XP: Built-in daily reward engine that grants streak XP bonuses strictly once per calendar day to cement positive habits.
+## What it includes
 
-🤖 AI Dungeon Assistant: Integrated intelligent breakdown tools to turn overwhelming projects into bite-sized actionable questlines with estimated XP rewards.
+- Quest and project tracking with progress, XP, levels, and completion states
+- Daily tasks, check-ins, reminders, streaks, and bonus XP
+- AI assistant for guidance and quest breakdowns
+- Google, GitHub, Apple, and email authentication
+- Authenticator-app MFA, email verification, idle logout, and session revocation
+- Firebase-backed user data with owner-based Firestore security rules
+- Server-side Gemini requests with request validation and rate limiting
+- Responsive dark and light themes with animated progress interactions
+- PWA support with shortcuts for New Quest and Today's Tasks
 
-📊 Hunter Stats & Activity Visualizers: Interactive radar metrics for Strength, Agility, and Discipline, paired with activity charts tracking your daily productivity velocity.
+## Tech stack
 
-🌓 Dynamic Asymmetric Themes: Seamless dark mode and warm modern light palette with cybernetic rift emitters and reactive audio chimes.
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-12-FFCA28?logo=firebase&logoColor=black)
+![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google%20Gemini-AI-4285F4?logo=google&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![Zod](https://img.shields.io/badge/Zod-validation-3E67B1?logo=zod&logoColor=white)
 
-# Fluid Gestures & Micro-Interactions -
+## Run locally
 
-📱 3D Device Perspective Gyro & Tilt: An interactive real-time 3D mobile mockup responding directly to mouse cursor dynamics, pointer coordinates, and touch angles.
+### 1. Clone and install
 
-👆 Tactile Quick-Taps & Check Animations: Smooth milestone ticks featuring synthesized Web Audio chimes and particle bursts on completion.
+```bash
+git clone https://github.com/rriyansh/SoloLevelingSystem.git
+cd SoloLevelingSystem
+npm install
+```
 
-🎚️ Interactive Quest Drawer & Filter Swipes: Effortless filtering across priority tags, categories, and dungeon statuses with responsive motion springs.
+### 2. Configure environment variables
 
-⚡ Haptic Rank-Up Ascension Overlays: Full-screen level-up triggers when clearing project thresholds with celebratory visual ripples.
+Copy `.env.example` to `.env` and set the Firebase values for your project. Keep `GEMINI_API_KEY` server-side. Do not add a `VITE_GEMINI_API_KEY` value.
 
+```env
+GEMINI_API_KEY=your_gemini_api_key
+APP_URL=http://localhost:3000
+
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_firebase_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_firebase_app_id
+```
+
+### 3. Start the development server
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000` in your browser.
+
+## Available scripts
+
+```bash
+npm run dev       # Start the Express and Vite development server
+npm run build     # Create a production build
+npm run start     # Start the production server
+npm run lint      # Run TypeScript checks
+npm run analyze   # Build with bundle analysis enabled
+```
+
+## Security notes
+
+Firestore rules restrict documents to their owning user. API routes require a verified Firebase ID token, validate request bodies with Zod, apply rate limits, and use security headers. Configure Firebase Admin credentials on the server before deploying the protected API routes.
+
+## Project structure
+
+```text
+api/           Vercel API handlers
+backend/       Server security and Firebase Admin helpers
+public/        PWA assets and manifest
+src/components Reusable interface components
+src/contexts   Authentication and application state
+src/lib        Validation and shared utilities
+src/pages      Application screens
+src/services   Client API services
+```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

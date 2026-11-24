@@ -20,5 +20,22 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "categories": [
+    "productivity",
+    "education"
+  ],
+  "display_override": [
+    "window-controls-overlay"
+  ],
+  "shortcuts": [
+    {
+      "name": "New Quest",
+      "url": "/new-project"
+    },
+    {
+      "name": "Today's Tasks",
+      "url": "/today"
+    }
   ]
 }

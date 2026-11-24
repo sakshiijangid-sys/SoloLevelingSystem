@@ -1,3 +1,5 @@
+import { chatMessageWrite, dailyTaskWrite, projectWrite } from '../lib/firestoreSchemas';
+import { questArguments } from '../lib/chatSchemas';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation } from 'react-router-dom';
@@ -7,7 +9,7 @@ import { chatWithAI } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
 import Markdown from 'react-markdown';
 import { cn } from '../lib/utils';
-import { collection, query, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns';
 
@@ -166,12 +168,12 @@ export default function AIChatbot() {
           
           // Optionally save initial greeting
           try {
-            await addDoc(collection(db, path), {
+            await addDoc(collection(db, path), chatMessageWrite.parse({
               userId: user.uid,
               role: initialGreeting.role,
               text: initialGreeting.text,
               createdAt: serverTimestamp()
-            });
+            }));
           } catch (e) {
             console.error("Failed to save initial greeting:", e);
           }
@@ -280,12 +282,12 @@ export default function AIChatbot() {
     try {
       // Save user message to Firestore
       try {
-        await addDoc(collection(db, chatPath), {
+        await addDoc(collection(db, chatPath), chatMessageWrite.parse({
           userId: user.uid,
           role: newUserMsg.role,
           text: newUserMsg.text,
           createdAt: serverTimestamp()
-        });
+        }));
       } catch (e) {
         console.error("Failed to save user message:", e);
       }
@@ -308,13 +310,15 @@ export default function AIChatbot() {
       if (aiResponse.functionCalls && !isGreeting) {
         for (const call of aiResponse.functionCalls) {
           if (call.name === 'createQuestWithTasks') {
-            const { questName, description, startDate, endDate, tasks } = call.args as any;
+            const { questName, description, startDate, endDate, tasks } = questArguments.parse(call.args);
             
             try {
               // 1. Create Project
               const projectsPath = 'projects';
               
-              const projectRef = await addDoc(collection(db, projectsPath), {
+              const projectRef = doc(collection(db, projectsPath));
+              const batch = writeBatch(db);
+              batch.set(projectRef, projectWrite.parse({
                 userId: user.uid,
                 name: questName,
                 description: description,
@@ -327,16 +331,16 @@ export default function AIChatbot() {
                 level: 1,
                 lastProcessed: serverTimestamp(),
                 createdAt: serverTimestamp(),
-              });
+              }));
 
               // 2. Add Tasks
-              const baseDate = new Date(startDate);
+              const baseDate = new Date(`${startDate}T00:00:00`);
               for (const task of tasks) {
                 const tasksPath = `projects/${projectRef.id}/dailyTasks`;
                 const taskDate = new Date(baseDate);
                 taskDate.setDate(taskDate.getDate() + (task.dayNumber || 0));
                 
-                await addDoc(collection(db, tasksPath), {
+                batch.set(doc(collection(db, tasksPath)), dailyTaskWrite.parse({
                   projectId: projectRef.id,
                   userId: user.uid,
                   text: task.text,
@@ -344,8 +348,9 @@ export default function AIChatbot() {
                   date: format(taskDate, 'yyyy-MM-dd'),
                   createdAt: serverTimestamp(),
                   reminderTime: task.reminderTime || null
-                });
+                }));
               }
+              await batch.commit();
             } catch (fsError) {
               handleFirestoreError(fsError, OperationType.WRITE, `projects/${questName}`);
             }
@@ -355,12 +360,12 @@ export default function AIChatbot() {
 
       // Save AI response to Firestore
       try {
-        await addDoc(collection(db, chatPath), {
+        await addDoc(collection(db, chatPath), chatMessageWrite.parse({
           userId: user.uid,
           role: newAiMsg.role,
           text: newAiMsg.text,
           createdAt: serverTimestamp()
-        });
+        }));
       } catch (e) {
         console.error("Failed to save AI response:", e);
       }
@@ -399,12 +404,12 @@ export default function AIChatbot() {
     setMessages(prev => [...prev, botMsg]);
     
     if (user) {
-      addDoc(collection(db, `users/${user.uid}/chatHistory`), {
+      addDoc(collection(db, `users/${user.uid}/chatHistory`), chatMessageWrite.parse({
         userId: user.uid,
         role: botMsg.role,
         text: botMsg.text,
         createdAt: serverTimestamp()
-      }).catch(console.error);
+      })).catch(console.error);
     }
   };
 

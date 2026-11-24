@@ -1,3 +1,6 @@
+import { getMultiFactorResolver, type MultiFactorResolver } from 'firebase/auth';
+import { auth } from '../firebase';
+import AdditionalSignIn from '../components/AdditionalSignIn';
 import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -5,7 +8,8 @@ import { Zap, Shield, Star, LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
-  const { signInWithGoogle, user } = useAuth();
+  const { signInWithGoogle, user, redirectResolver } = useAuth();
+  const [googleResolver, setGoogleResolver] = useState<MultiFactorResolver>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ReactNode | null>(null);
   const navigate = useNavigate();
@@ -30,7 +34,9 @@ export default function Login() {
       await signInWithGoogle();
       navigate(from, { replace: true });
     } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain') {
+      if (err.code === 'auth/multi-factor-auth-required') {
+        setGoogleResolver(getMultiFactorResolver(auth, err));
+      } else if (err.code === 'auth/unauthorized-domain') {
         setError(
           <div className="text-left space-y-2">
             <p className="font-bold">Domain Unauthorized!</p>
@@ -129,6 +135,8 @@ export default function Login() {
               </>
             )}
           </button>
+
+          <AdditionalSignIn disabled={loading} googleResolver={googleResolver ?? redirectResolver} />
 
           <p className="text-[10px] text-center text-gray-400 dark:text-gray-500 font-mono uppercase tracking-widest leading-relaxed">
             By initializing the system, you agree to the terms of service and privacy policy.

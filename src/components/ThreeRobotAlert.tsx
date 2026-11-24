@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { drawRobotParticles, type CanvasParticle } from '../lib/robotParticles';
+import { useEffect, useRef } from 'react';
 import { playRobotGiggleSound } from '../lib/soundEffects';
 
 interface ThreeRobotAlertProps {
@@ -7,23 +8,11 @@ interface ThreeRobotAlertProps {
   onTickle?: (intensity: number) => void;
 }
 
-interface CanvasParticle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  color: string;
-  size: number;
-}
-
 export default function ThreeRobotAlert({ className, onAnimationReady, onTickle }: ThreeRobotAlertProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Soft interactive state
-  const [, setIsGiggling] = useState(false);
 
   // Refs for smooth 60fps render loop
   const giggleScoreRef = useRef(0); // 0.0 to 1.0
@@ -111,7 +100,6 @@ export default function ThreeRobotAlert({ className, onAnimationReady, onTickle 
       if (onRobotTarget && delta > 3) {
         // Gentle increase, capped smoothly
         giggleScoreRef.current = Math.min(1.0, giggleScoreRef.current + 0.12);
-        setIsGiggling(true);
         if (onTickle) onTickle(Math.round(giggleScoreRef.current * 10));
 
         // Soft, slower sound timing (spaced out every ~520ms)
@@ -147,7 +135,6 @@ export default function ThreeRobotAlert({ className, onAnimationReady, onTickle 
       if (!isInsideFaceOrTummy(clientX, clientY)) return;
 
       giggleScoreRef.current = Math.min(1.0, giggleScoreRef.current + 0.45);
-      setIsGiggling(true);
       playRobotGiggleSound(0.9);
 
       for (let i = 0; i < 4; i++) {
@@ -230,7 +217,6 @@ export default function ThreeRobotAlert({ className, onAnimationReady, onTickle 
         giggleScoreRef.current = Math.max(0, giggleScoreRef.current - 0.007);
       } else if (giggleScoreRef.current > 0) {
         giggleScoreRef.current = 0;
-        setIsGiggling(false);
       }
 
       const giggleFactor = giggleScoreRef.current; // 0 to 1
@@ -812,30 +798,7 @@ export default function ThreeRobotAlert({ className, onAnimationReady, onTickle 
       });
       ctx.restore();
 
-      // 16. CANVAS PARTICLES (Slow, gentle rising glints - no comic tags)
-      ctx.save();
-      for (let i = canvasParticles.length - 1; i >= 0; i--) {
-        const pt = canvasParticles[i];
-        pt.life++;
-        pt.x += pt.vx;
-        pt.y += pt.vy;
-        const alpha = Math.max(0, 1 - pt.life / pt.maxLife);
-
-        if (pt.life >= pt.maxLife) {
-          canvasParticles.splice(i, 1);
-          continue;
-        }
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(pt.x, pt.y);
-        ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, pt.size * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-      ctx.restore();
+      drawRobotParticles(ctx, canvasParticles);
 
       ctx.restore(); // end frame
     };

@@ -1,14 +1,8 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({
-  apiKey: apiKey,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+import express from 'express';
+import { configureProxy, apiSecurity } from '../backend/security';
+import { chatRequest, questArguments } from '../src/lib/chatSchemas';
 
 const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
@@ -101,11 +95,11 @@ function sanitizeHistory(rawHistory: { role: 'user' | 'model', parts: { text: st
   return cleaned;
 }
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+const app = express();
+app.disable('x-powered-by');
+configureProxy(app);
+app.use(apiSecurity(15));
+app.post('*', async (req, res) => {
   try {
     const currentApiKey = process.env.GEMINI_API_KEY;
     if (!currentApiKey) {
@@ -114,16 +108,18 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const { message, history = [], userName = 'Adventurer' } = body;
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required.' });
-    }
+    const parsed = chatRequest.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid chat request.' });
+    const { message, history, userName, mode } = parsed.data;
+    const ai = new GoogleGenAI({
+      apiKey: currentApiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+    });
 
     const cleanHistory = sanitizeHistory(history);
     const cleanMessage = message.trim();
     const isGreeting = /^(hi|hello|hey|greetings|hola|sup|yo|good\s+(morning|afternoon|evening|day))\b[!.?]*$/i.test(cleanMessage);
-    const isQuestCreationIntent = !isGreeting && /(create|schedule|add|make|plan|start|generate|setup|set up)\s+(a\s+)?(new\s+)?(quest|routine|task|project|habit|goal)/i.test(cleanMessage);
+    const isQuestCreationIntent = mode === 'chat' && !isGreeting && /(create|schedule|add|make|plan|start|generate|setup|set up)\s+(a\s+)?(new\s+)?(quest|routine|task|project|habit|goal)/i.test(cleanMessage);
 
     const config: any = {
       systemInstruction: `You are the "Solo Leveling System Oracle", a wise, motivating, and friendly AI guide assisting the user "${userName}".
@@ -144,6 +140,10 @@ Tone:
 
     if (isQuestCreationIntent) {
       config.tools = [{ functionDeclarations: [createQuestWithTasksDeclaration] }];
+    }
+
+    if (mode === 'tip') {
+      config.systemInstruction = 'Return one friendly quest tip in plain text, in at most 15 words.';
     }
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -196,13 +196,15 @@ Tone:
       throw lastError || new Error('All model endpoints were unreachable.');
     }
 
-    const functionCalls = result.functionCalls;
-    if (!isGreeting && functionCalls && functionCalls.length > 0) {
-      const firstCall = functionCalls[0];
-      const questName = (firstCall.args as any)?.questName || 'New Quest';
+    const proposed = result.functionCalls?.find((call: { name?: string }) => call.name === 'createQuestWithTasks');
+    if (isQuestCreationIntent && proposed) {
+      const parsedQuest = questArguments.safeParse(proposed.args);
+      if (!parsedQuest.success) {
+        return res.status(502).json({ error: 'The generated quest was invalid. Please try again.' });
+      }
       return res.json({
-        text: result.text || `I have scheduled your new quest **${questName}** with daily tasks added to your quest board! Ready to level up?`,
-        functionCalls: functionCalls,
+        text: result.text || `Prepared **${parsedQuest.data.questName}** with daily tasks.`,
+        functionCalls: [{ name: 'createQuestWithTasks', args: parsedQuest.data }],
       });
     }
 
@@ -227,4 +229,6 @@ Tone:
     }
     return res.status(500).json({ error: userFriendlyMsg });
   }
-}
+});
+
+export default app;

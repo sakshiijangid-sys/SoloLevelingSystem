@@ -1,11 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { analyzer } from 'vite-bundle-analyzer';
 import { defineConfig } from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(mode === 'analyze' ? [analyzer({ analyzerMode: 'static', openAnalyzer: false })] : []),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

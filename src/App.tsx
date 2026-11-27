@@ -34,14 +34,15 @@ function QuestScreen({ children }: { children: ReactNode }) {
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, verifying } = useAuth();
   const { theme } = useTheme();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || verifying) {
     return (
-      <div className={`min-h-screen ${theme === 'dark' ? 'bg-black' : 'bg-gray-50'} flex items-center justify-center`}>
-        <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <div className={`min-h-screen ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-50 text-gray-900'} flex flex-col items-center justify-center gap-3`}>
+        <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-medium opacity-70">Verifying your session...</p>
       </div>
     );
   }
@@ -52,6 +53,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
   return <>{children}</>;
 }
+
 
 function AppContent() {
   const { user } = useAuth();

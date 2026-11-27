@@ -1,18 +1,14 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { 
-  User, 
-  onIdTokenChanged,
-  type IdTokenResult,
-  signInWithPopup, 
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import {
+  User,
+  onAuthStateChanged,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  getMultiFactorResolver,
-  type MultiFactorResolver,
   signInWithCredential,
-  GoogleAuthProvider, 
+  GoogleAuthProvider,
   signOut as firebaseSignOut,
-  setPersistence,
-  browserLocalPersistence
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -22,124 +18,212 @@ declare global {
   }
 }
 
+const AUTH_REDIRECT_PENDING_KEY = 'sls_auth_redirect_pending_ts';
+const AUTH_REDIRECT_FAILED_KEY = 'sls_auth_redirect_failed';
+const AUTH_RETURN_PATH_KEY = 'sls_auth_return_path';
+const REDIRECT_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+function writeStorage(key: string, value: string | null) {
+  for (const store of [
+    () => window.sessionStorage,
+    () => window.localStorage,
+  ]) {
+    try {
+      const s = store();
+      if (value === null) {
+        s.removeItem(key);
+      } else {
+        s.setItem(key, value);
+      }
+    } catch {
+      // Ignore storage access errors in restricted browsers/WebViews
+    }
+  }
+}
+
+function readStorage(key: string): string | null {
+  for (const store of [
+    () => window.sessionStorage,
+    () => window.localStorage,
+  ]) {
+    try {
+      const val = store().getItem(key);
+      if (val !== null) return val;
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+  return null;
+}
+
+export function saveAuthReturnPath(path: string) {
+  if (path && path !== '/login') {
+    writeStorage(AUTH_RETURN_PATH_KEY, path);
+  }
+}
+
+export function peekAuthReturnPath(): string | null {
+  const path = readStorage(AUTH_RETURN_PATH_KEY);
+  return path && path !== '/login' ? path : null;
+}
+
+export function consumeAuthReturnPath(): string | null {
+  const path = peekAuthReturnPath();
+  writeStorage(AUTH_RETURN_PATH_KEY, null);
+  return path;
+}
+
+function setRedirectPending(pending: boolean) {
+  writeStorage(AUTH_REDIRECT_PENDING_KEY, pending ? String(Date.now()) : null);
+}
+
+function isRedirectPending(): boolean {
+  const raw = readStorage(AUTH_REDIRECT_PENDING_KEY);
+  if (!raw) return false;
+  const ts = Number(raw);
+  if (!Number.isFinite(ts) || Date.now() - ts > REDIRECT_TTL_MS) {
+    writeStorage(AUTH_REDIRECT_PENDING_KEY, null);
+    return false;
+  }
+  return true;
+}
+
+const REDIRECT_FAILED_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function setRedirectFailed(failed: boolean) {
+  writeStorage(AUTH_REDIRECT_FAILED_KEY, failed ? String(Date.now()) : null);
+}
+
+function hasRedirectFailedRecently(): boolean {
+  const raw = readStorage(AUTH_REDIRECT_FAILED_KEY);
+  if (!raw) return false;
+  const ts = Number(raw);
+  if (!Number.isFinite(ts) || Date.now() - ts > REDIRECT_FAILED_TTL_MS) {
+    writeStorage(AUTH_REDIRECT_FAILED_KEY, null);
+    return false;
+  }
+  return true;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  redirectResolver?: MultiFactorResolver;
-  claims: IdTokenResult['claims'] | null;
-  signInWithGoogle: () => Promise<void>;
+  verifying: boolean;
+  authError: string | null;
+  clearAuthError: () => void;
+  signInWithGoogle: (returnPath?: string, options?: { popupOnly?: boolean }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [loading, setLoading] = useState(true);
-  const [redirectResolver, setRedirectResolver] = useState<MultiFactorResolver>();
-  const [claims, setClaims] = useState<IdTokenResult['claims'] | null>(null);
+  const [verifying, setVerifying] = useState<boolean>(() => isRedirectPending());
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
 
   useEffect(() => {
-    void setPersistence(auth, browserLocalPersistence).catch(console.error);
-    void getRedirectResult(auth).catch(error => {
-      if (error.code === 'auth/multi-factor-auth-required') {
-        setRedirectResolver(getMultiFactorResolver(auth, error));
-      } else {
-        console.error('Redirect sign-in failed:', error);
+    let isMounted = true;
+    let redirectSettled = false;
+    let initialAuthEmitted = false;
+    let latestUser: User | null = auth.currentUser;
+
+    const finishLoadingIfReady = () => {
+      if (!isMounted) return;
+      if (redirectSettled && initialAuthEmitted) {
+        setLoading(false);
+        setVerifying(false);
       }
+    };
+
+    const resolveRedirect = async () => {
+      const hadPendingRedirect = isRedirectPending();
+
+      try {
+        const result = await getRedirectResult(auth, browserPopupRedirectResolver);
+        if (!isMounted) return;
+
+        if (result?.user) {
+          latestUser = result.user;
+          setUser(result.user);
+          setAuthError(null);
+          setRedirectFailed(false);
+        } else if (hadPendingRedirect && !auth.currentUser && !latestUser) {
+          // Wait briefly for IndexedDB/onAuthStateChanged hydration before flagging failure
+          await new Promise(resolve => setTimeout(resolve, 400));
+          if (isMounted && !auth.currentUser && !latestUser) {
+            setRedirectFailed(true);
+            setAuthError(
+              'REDIRECT_STATE_LOST: Your browser blocked cross-site redirect storage when returning from Google. Use direct pop-up sign-in below instead.'
+            );
+          }
+        }
+      } catch (error: any) {
+        if (!isMounted) return;
+        console.error('Redirect login error:', error);
+        const code = error?.code || '';
+        if (code && code !== 'auth/no-current-user') {
+          if (code === 'auth/unauthorized-domain') {
+            setAuthError(`auth/unauthorized-domain: ${window.location.hostname}`);
+          } else {
+            setRedirectFailed(true);
+            setAuthError(error.message || 'Could not complete Google redirect sign-in.');
+          }
+        }
+      } finally {
+        setRedirectPending(false);
+        redirectSettled = true;
+        finishLoadingIfReady();
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!isMounted) return;
+      latestUser = firebaseUser;
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        setAuthError(null);
+        setRedirectPending(false);
+        setRedirectFailed(false);
+      }
+      initialAuthEmitted = true;
+      finishLoadingIfReady();
     });
 
-    let version = 0;
-    const unsubscribe = onIdTokenChanged(auth, async current => {
-      const latest = ++version;
-      setUser(current);
-      setClaims(null);
-      try {
-        const token = await current?.getIdTokenResult();
-        if (latest === version) setClaims(token?.claims ?? null);
-      } catch {
-        if (latest === version) setClaims(null);
-      } finally {
-        if (latest === version) setLoading(false);
-      }
-    });
+    resolveRedirect();
+
     return () => {
-      version++;
+      isMounted = false;
       unsubscribe();
     };
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const idleLimit = 30 * 60_000;
-    const key = `solo_leveling_last_activity_${user.uid}`;
-    let lastActivity = Date.now();
-    let timer: ReturnType<typeof setTimeout>;
-    const readActivity = () => {
-      try {
-        const stored = Number(localStorage.getItem(key));
-        if (stored > 0 && stored <= Date.now()) lastActivity = Math.max(stored, lastActivity);
-      } catch {
-        // In-memory timeout still applies.
-      }
-    };
-    try {
-      const stored = Number(localStorage.getItem(key));
-      const lastSignIn = Date.parse(user.metadata.lastSignInTime ?? '');
-      if (stored > 0 && stored <= lastActivity && stored >= lastSignIn) lastActivity = stored;
-    } catch {
-      // In-memory timeout still applies.
-    }
-    const check = () => {
-      readActivity();
-      clearTimeout(timer);
-      const remaining = idleLimit - (Date.now() - lastActivity);
-      if (remaining <= 0) {
-        if (auth.currentUser?.uid === user.uid) void firebaseSignOut(auth).catch(console.error);
-        return false;
-      }
-      timer = setTimeout(check, remaining);
-      return true;
-    };
-    const activity = () => {
-      if (!check()) return;
-      if (Date.now() - lastActivity < 1000) return;
-      lastActivity = Date.now();
-      try {
-        localStorage.setItem(key, String(lastActivity));
-      } catch {
-        // In-memory timeout still applies.
-      }
-      check();
-    };
-    const events = ['pointerdown', 'keydown', 'scroll'] as const;
-    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
-    document.addEventListener('visibilitychange', check);
-    window.addEventListener('storage', check);
-    check();
-    return () => {
-      clearTimeout(timer);
-      events.forEach(event => window.removeEventListener(event, activity));
-      document.removeEventListener('visibilitychange', check);
-      window.removeEventListener('storage', check);
-    };
-  }, [user?.uid]);
-
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (returnPath?: string, options?: { popupOnly?: boolean }) => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    
+    setAuthError(null);
+    setVerifying(true);
+
+    if (returnPath) {
+      saveAuthReturnPath(returnPath);
+    }
+
     try {
-      // 1. CHECK FOR MEDIAN NATIVE BRIDGE
+      // 1. Check for Median native bridge
       if (window.median?.google?.login) {
-        console.log("Using Median Native Google Login...");
-        return new Promise<void>((resolve, reject) => {
+        return await new Promise<void>((resolve, reject) => {
           window.median.google.login({
             callback: async (data: any) => {
               if (data.idToken) {
                 try {
                   const credential = GoogleAuthProvider.credential(data.idToken);
-                  await signInWithCredential(auth, credential);
+                  const credResult = await signInWithCredential(auth, credential);
+                  setUser(credResult.user);
                   resolve();
                 } catch (err) {
                   reject(err);
@@ -147,51 +231,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               } else if (data.error) {
                 reject(new Error(data.error));
               } else {
-                reject(new Error("Median login failed: No idToken received"));
+                reject(new Error('Median login failed: No idToken received'));
               }
-            }
+            },
           });
         });
       }
 
-      // 2. STANDARD WEB FLOW
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isWebView = /WebView|(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(navigator.userAgent);
-
-      if (isWebView) {
-        // WebViews struggle with both popup and redirect state.
-        // We try popup first because it doesn't lose state as often if allowed.
-        try {
-          await signInWithPopup(auth, provider);
-        } catch (popupError: any) {
-          if (popupError.code === 'auth/multi-factor-auth-required') throw popupError;
-          console.warn("Popup failed in WebView, trying redirect...", popupError);
-          // If popup blocked or failed, fall back to redirect ONLY as last resort
-          await signInWithRedirect(auth, provider);
+      // 2. Popup-first across all devices (Mobile Chrome/Safari & Desktop).
+      // Pass browserPopupRedirectResolver explicitly so Firebase resolves cleanly across browsers.
+      try {
+        const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+        if (result?.user) {
+          setUser(result.user);
+          setRedirectPending(false);
+          setRedirectFailed(false);
         }
-      } else if (isMobile) {
-        // Redirection is usually better in mobile browsers
-        await signInWithRedirect(auth, provider);
-      } else {
-        await signInWithPopup(auth, provider);
+        return;
+      } catch (popupError: any) {
+        const code = popupError?.code || '';
+        const canTryRedirectFallback =
+          !options?.popupOnly &&
+          !hasRedirectFailedRecently() &&
+          (code === 'auth/popup-blocked' ||
+            code === 'auth/operation-not-supported-in-this-environment');
+
+        if (canTryRedirectFallback) {
+          console.warn('Popup blocked or unsupported, trying single redirect fallback:', code);
+          setRedirectPending(true);
+          await signInWithRedirect(auth, provider, browserPopupRedirectResolver);
+          return;
+        }
+
+        // Prevent silent loop if popup was blocked after an already-failed redirect
+        if (code === 'auth/popup-blocked' && hasRedirectFailedRecently()) {
+          const err: any = new Error(
+            'POPUP_AND_REDIRECT_BLOCKED: Your browser blocked both pop-ups and redirect cookies. Allow pop-ups for this site or open in Chrome/Safari.'
+          );
+          err.code = 'auth/popup-blocked';
+          throw err;
+        }
+
+        throw popupError;
       }
     } catch (error) {
-      console.error("Login Error:", error);
+      setRedirectPending(false);
+      setVerifying(false);
       throw error;
+    } finally {
+      if (!isRedirectPending()) {
+        setVerifying(false);
+      }
     }
   };
 
   const logout = async () => {
     try {
+      setRedirectPending(false);
+      setRedirectFailed(false);
+      consumeAuthReturnPath();
       await firebaseSignOut(auth);
+      setUser(null);
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.error('Error signing out:', error);
       throw error;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, claims, redirectResolver, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, verifying, authError, clearAuthError, signInWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -204,3 +312,5 @@ export function useAuth() {
   }
   return context;
 }
+
+

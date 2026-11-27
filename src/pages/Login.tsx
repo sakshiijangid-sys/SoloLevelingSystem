@@ -1,81 +1,122 @@
-import { getMultiFactorResolver, type MultiFactorResolver } from 'firebase/auth';
-import { auth } from '../firebase';
-import AdditionalSignIn from '../components/AdditionalSignIn';
 import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Zap, Shield, Star, LogIn } from 'lucide-react';
+import { useAuth, peekAuthReturnPath, consumeAuthReturnPath } from '../contexts/AuthContext';
+import { Zap, Shield, Star, LogIn, Loader2, ExternalLink } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
-  const { signInWithGoogle, user, redirectResolver } = useAuth();
-  const [googleResolver, setGoogleResolver] = useState<MultiFactorResolver>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<ReactNode | null>(null);
+  const { signInWithGoogle, user, loading: authLoading, verifying, authError, clearAuthError } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<ReactNode | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = location.state?.from?.pathname || "/";
+  const savedReturnPath = peekAuthReturnPath();
+  const rawFrom = location.state?.from?.pathname || savedReturnPath || '/';
+  const from = rawFrom === '/login' ? '/' : rawFrom;
 
+  // Instant redirect as soon as auth settles and user is verified
   useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
+    if (!authLoading && user) {
+      const consumedPath = consumeAuthReturnPath();
+      const rawTarget = location.state?.from?.pathname || consumedPath || '/';
+      const target = rawTarget === '/login' ? '/' : rawTarget;
+      navigate(target, { replace: true });
     }
-  }, [user, navigate, from]);
+  }, [authLoading, user, navigate, location.state]);
 
-  if (user) {
-    return null;
-  }
+  // Surface any redirect/session error detected during startup hydration
+  useEffect(() => {
+    if (!authError) return;
+    if (authError.includes('auth/unauthorized-domain')) {
+      setLocalError(
+        <div className="text-left space-y-2">
+          <p className="font-bold">Domain Unauthorized</p>
+          <p className="text-xs">Add this domain to Firebase Console under Authentication &gt; Settings &gt; Authorized domains:</p>
+          <code className="block bg-red-900/20 px-2 py-1 rounded text-[11px] break-all">{window.location.hostname}</code>
+        </div>
+      );
+    } else if (authError.includes('REDIRECT_STATE_LOST') || authError.includes('missing initial state')) {
+      setLocalError(
+        <div className="text-left space-y-2">
+          <p className="font-bold text-amber-600 dark:text-amber-400">Browser Blocked Redirect Session</p>
+          <p className="text-xs leading-relaxed">
+            Your browser cleared the Google redirect state on return. Allow pop-ups when prompted and tap <b>Sign in with Google (Pop-up)</b> below, or open this page in Chrome/Safari.
+          </p>
+        </div>
+      );
+    } else {
+      setLocalError(authError);
+    }
+  }, [authError]);
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError(null);
+  const isVerifying = authLoading || verifying || isSubmitting || Boolean(user);
+
+  const handleGoogleSignIn = async (popupOnly = false) => {
+    setIsSubmitting(true);
+    setLocalError(null);
+    clearAuthError();
+
     try {
-      await signInWithGoogle();
-      navigate(from, { replace: true });
+      await signInWithGoogle(from, { popupOnly });
+      // Navigation happens automatically via the useEffect once user state is confirmed.
     } catch (err: any) {
-      if (err.code === 'auth/multi-factor-auth-required') {
-        setGoogleResolver(getMultiFactorResolver(auth, err));
-      } else if (err.code === 'auth/unauthorized-domain') {
-        setError(
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      if (code === 'auth/unauthorized-domain') {
+        setLocalError(
           <div className="text-left space-y-2">
-            <p className="font-bold">Domain Unauthorized!</p>
-            <p>You must add this domain to your Firebase Console:</p>
-            <ol className="list-decimal ml-5 text-sm space-y-1">
-              <li>Open <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="underline">Firebase Console</a></li>
-              <li>Go to <b>Authentication</b> &gt; <b>Settings</b> &gt; <b>Authorized domains</b></li>
-              <li>Click <b>Add domain</b> and enter: <code className="bg-red-900/30 px-1 rounded">{window.location.hostname}</code></li>
-            </ol>
-            <button 
-              onClick={() => window.open(window.location.href, '_blank')}
-              className="mt-2 w-full bg-purple-600 text-white text-[10px] py-2 rounded-lg font-bold"
+            <p className="font-bold">Domain Unauthorized</p>
+            <p className="text-xs">Add this domain to Firebase Console under Authentication &gt; Settings &gt; Authorized domains:</p>
+            <code className="block bg-red-900/20 px-2 py-1 rounded text-[11px] break-all">{window.location.hostname}</code>
+          </div>
+        );
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setLocalError('Sign-in was cancelled before completing. Tap Sign in with Google when you are ready.');
+      } else if (code === 'auth/popup-blocked' || msg.includes('POPUP_AND_REDIRECT_BLOCKED')) {
+        setLocalError(
+          <div className="text-left space-y-2.5">
+            <p className="font-bold text-amber-600 dark:text-amber-400">Pop-up Blocked by Browser</p>
+            <p className="text-xs leading-relaxed">
+              Your browser blocked the Google sign-in pop-up and cleared redirect cookies. Allow pop-ups for this site, then tap below:
+            </p>
+            <button
+              type="button"
+              onClick={() => handleGoogleSignIn(true)}
+              className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 text-white text-xs py-2.5 px-4 rounded-xl font-bold transition-colors cursor-pointer"
             >
-              OPEN IN SYSTEM BROWSER
+              Sign in via Pop-up
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="w-full min-h-[40px] bg-gray-900/10 dark:bg-white/10 hover:bg-gray-900/20 dark:hover:bg-white/20 text-xs py-2 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open in System Browser
             </button>
           </div>
         );
-      } else if (err.message?.includes('missing initial state') || err.code === 'auth/popup-closed-by-user') {
-        setError(
+      } else if (msg.includes('missing initial state')) {
+        setLocalError(
           <div className="text-left space-y-2">
-            <p className="font-bold text-red-500">System Blocked by Browser</p>
-            <p className="text-xs">Your app's browser is blocking the login state. Please use the button below to log in via your main phone browser:</p>
-            <button 
+            <p className="font-bold text-red-500">Browser Storage Restricted</p>
+            <p className="text-xs">This browser is blocking sign-in storage. Open the app directly in Chrome or Safari to sign in smoothly:</p>
+            <button
+              type="button"
               onClick={() => window.open(window.location.href, '_blank')}
-              className="w-full bg-purple-600 text-white text-[10px] py-2 rounded-lg font-bold"
+              className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 text-white text-xs py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
             >
-              LOGIN IN STANDARD BROWSER (CHROME/SAFARI)
+              <ExternalLink className="w-4 h-4" />
+              Open in System Browser
             </button>
-            <div className="mt-2 p-2 bg-purple-500/10 rounded-lg text-[9px]">
-              <p className="font-bold uppercase mb-1">Developer Tip:</p>
-              <p>Make sure the "Google Sign-In" plugin is enabled in your Median.co dashboard.</p>
-            </div>
           </div>
         );
       } else {
-        setError(err.message || "Failed to sign in. Please try again.");
+        setLocalError(msg || 'Failed to sign in. Please try again.');
       }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -98,66 +139,83 @@ export default function Login() {
         </div>
 
         <div className="bg-white/80 dark:bg-gray-900/40 border border-gray-200 dark:border-purple-500/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 backdrop-blur-xl space-y-6 sm:space-y-8 shadow-2xl transition-colors">
-          <div className="space-y-4 sm:space-y-6">
-            <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-purple-500/5 rounded-2xl border border-gray-100 dark:border-purple-500/10">
-              <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-              <div className="text-left">
-                <p className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Secure Login</p>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Your data is linked to your account.</p>
+          {isVerifying ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="py-10 flex flex-col items-center justify-center text-center space-y-4"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-16 h-16 rounded-full bg-purple-500/20 blur-md animate-pulse" />
+                <Loader2 className="relative w-10 h-10 text-purple-600 dark:text-purple-400 animate-spin" />
               </div>
-            </div>
-            <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-purple-500/5 rounded-2xl border border-gray-100 dark:border-purple-500/10">
-              <Star className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-              <div className="text-left">
-                <p className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">Persistent Progress</p>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Old users get their projects back instantly.</p>
+              <div className="space-y-1.5">
+                <p className="text-base font-bold text-gray-900 dark:text-white">
+                  Verifying your session...
+                </p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                  Syncing your Hunter profile and redirecting you now.
+                </p>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          ) : (
+            <>
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-purple-500/5 rounded-2xl border border-gray-100 dark:border-purple-500/10">
+                  <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Secure Login</p>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Your data is linked to your Google account.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-purple-500/5 rounded-2xl border border-gray-100 dark:border-purple-500/10">
+                  <Star className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Persistent Progress</p>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Returning users get their quests and XP back instantly.</p>
+                  </div>
+                </div>
+              </div>
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 p-3 sm:p-4 rounded-xl text-red-600 dark:text-red-400 text-[10px] sm:text-xs font-mono">
-              {error}
-            </div>
-          )}
+              {localError && (
+                <div className="bg-red-500/10 border border-red-500/20 p-3.5 sm:p-4 rounded-xl text-red-700 dark:text-red-300 text-xs leading-relaxed">
+                  {localError}
+                </div>
+              )}
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 text-white dark:text-black px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2 sm:gap-3 transition-all shadow-lg dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-xl dark:hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed group"
-          >
-            {loading ? (
-              <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
+              <button
+                type="button"
+                onClick={() => handleGoogleSignIn(false)}
+                disabled={isVerifying}
+                className="w-full min-h-[48px] bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 text-white dark:text-black px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 sm:gap-3 transition-all shadow-lg dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-xl dark:hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+              >
                 <LogIn className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
-                SIGN IN WITH GOOGLE
-              </>
-            )}
-          </button>
+                Sign in with Google
+              </button>
 
-          <AdditionalSignIn disabled={loading} googleResolver={googleResolver ?? redirectResolver} />
-
-          <p className="text-[10px] text-center text-gray-400 dark:text-gray-500 font-mono uppercase tracking-widest leading-relaxed">
-            By initializing the system, you agree to the terms of service and privacy policy.
-          </p>
+              <p className="text-[11px] text-center text-gray-500 dark:text-gray-400 leading-relaxed">
+                By signing in, you agree to the terms of service and privacy policy.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="flex justify-center gap-8 opacity-50">
           <div className="flex flex-col items-center gap-1">
             <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em]">Fast</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest">Fast</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em]">Secure</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest">Secure</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <Star className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em]">Reliable</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest">Reliable</span>
           </div>
         </div>
       </motion.div>
     </div>
   );
 }
+

@@ -6,6 +6,11 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signInWithCredential,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  updateProfile,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   browserPopupRedirectResolver,
@@ -22,6 +27,7 @@ const AUTH_REDIRECT_PENDING_KEY = 'sls_auth_redirect_pending_ts';
 const AUTH_REDIRECT_FAILED_KEY = 'sls_auth_redirect_failed';
 const AUTH_RETURN_PATH_KEY = 'sls_auth_return_path';
 const REDIRECT_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const REDIRECT_FAILED_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function writeStorage(key: string, value: string | null) {
   for (const store of [
@@ -88,8 +94,6 @@ function isRedirectPending(): boolean {
   return true;
 }
 
-const REDIRECT_FAILED_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
 function setRedirectFailed(failed: boolean) {
   writeStorage(AUTH_REDIRECT_FAILED_KEY, failed ? String(Date.now()) : null);
 }
@@ -115,6 +119,15 @@ interface AuthContextType {
     returnPath?: string,
     options?: { popupOnly?: boolean; forceRedirect?: boolean }
   ) => Promise<void>;
+  signInWithEmail: (email: string, password: string, returnPath?: string) => Promise<void>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    displayName?: string,
+    returnPath?: string
+  ) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -155,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRedirectFailed(true);
           setAuthError(
             oauthErr === 'access_denied'
-              ? 'auth/access-denied: Google blocked sign-in for this account. If OAuth Consent Screen is in Testing mode, publish it to Production or add this email as a Test user.'
+              ? 'auth/access-denied: Google blocked sign-in for this account. If OAuth Consent Screen is in Testing mode, publish it to Production or use Email & Password below.'
               : `OAuth error: ${oauthErr}`
           );
           setRedirectPending(false);
@@ -182,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isMounted && !auth.currentUser && !latestUser) {
             setRedirectFailed(true);
             setAuthError(
-              'REDIRECT_STATE_LOST: Your browser blocked cross-site redirect storage when returning from Google. Use direct pop-up sign-in below instead.'
+              'REDIRECT_STATE_LOST: Your browser blocked cross-site redirect storage when returning from Google. Use Email & Password or direct pop-up sign-in below.'
             );
           }
         }
@@ -195,7 +208,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAuthError(`auth/unauthorized-domain: ${window.location.hostname}`);
           } else {
             setRedirectFailed(true);
-            setAuthError(code ? `${code}: ${error.message || 'Could not complete Google redirect sign-in.'}` : (error.message || 'Could not complete Google redirect sign-in.'));
+            setAuthError(
+              code
+                ? `${code}: ${error.message || 'Could not complete Google redirect sign-in.'}`
+                : (error.message || 'Could not complete Google redirect sign-in.')
+            );
           }
         }
       } finally {
@@ -316,6 +333,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string, returnPath?: string) => {
+    setAuthError(null);
+    setRedirectPending(false);
+    setVerifying(true);
+    if (returnPath) {
+      saveAuthReturnPath(returnPath);
+    }
+
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      setUser(credential.user);
+      setRedirectFailed(false);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const signUpWithEmail = async (
+    email: string,
+    password: string,
+    displayName?: string,
+    returnPath?: string
+  ) => {
+    setAuthError(null);
+    setRedirectPending(false);
+    setVerifying(true);
+    if (returnPath) {
+      saveAuthReturnPath(returnPath);
+    }
+
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const cleanName = displayName?.trim();
+      if (cleanName) {
+        try {
+          await updateProfile(credential.user, { displayName: cleanName });
+        } catch (profileErr) {
+          console.warn('Could not update display name:', profileErr);
+        }
+      }
+      try {
+        await sendEmailVerification(credential.user);
+      } catch (verifyErr) {
+        console.warn('Could not send verification email:', verifyErr);
+      }
+      setUser(credential.user);
+      setRedirectFailed(false);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    setAuthError(null);
+    await sendPasswordResetEmail(auth, email.trim());
+  };
+
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) {
+      throw new Error('Sign in first to verify your email address.');
+    }
+    await sendEmailVerification(auth.currentUser);
+  };
+
   const logout = async () => {
     try {
       setRedirectPending(false);
@@ -330,7 +411,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, verifying, authError, clearAuthError, signInWithGoogle, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        verifying,
+        authError,
+        clearAuthError,
+        signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        sendPasswordReset,
+        resendVerificationEmail,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -343,5 +438,3 @@ export function useAuth() {
   }
   return context;
 }
-
-

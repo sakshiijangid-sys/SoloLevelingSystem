@@ -374,7 +374,9 @@ export default function AIChatbot() {
       let errorMsg = "Forgive me, the magical connection is weak. I could not reach the Oracle. Please try again later.";
       
       const errString = error?.message || String(error || '');
-      if (
+      if (errString.includes("Verify your email")) {
+        errorMsg = "✉️ **Email Verification Needed**\n\nPlease click the verification link sent to your email inbox (or resend it from your Profile menu), then refresh and ask again.";
+      } else if (
         errString.includes("GEMINI_API_KEY_MISSING") || 
         errString.includes("API key not valid") || 
         errString.includes("apiKey is required") || 

@@ -26,12 +26,13 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, resendVerificationEmail } = useAuth();
   const { theme } = useTheme();
   const { bonusStatus, openBonusModal } = useDailyBonus();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStats, setShowStats] = useState(false);
+  const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !isOpen) return;
@@ -419,12 +420,35 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
                 {/* Details List */}
                 <div className="w-full mt-4 space-y-3">
-                  <div className="flex items-center gap-4 p-4 bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl transition-colors">
-                    <Mail className="w-5 h-5 text-gray-500" />
-                    <div className="text-left">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Email Address</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{user.email}</p>
+                  <div className="flex items-center justify-between gap-3 p-4 bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl transition-colors">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <Mail className="w-5 h-5 text-gray-500 shrink-0" />
+                      <div className="text-left min-w-0">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Email Address</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{user.email}</p>
+                        {!user.emailVerified && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            {verifyNotice || 'Email unverified — verify to unlock AI Oracle'}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {!user.emailVerified && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await resendVerificationEmail();
+                            setVerifyNotice('Verification link sent. Check your inbox.');
+                          } catch {
+                            setVerifyNotice('Wait a moment before resending.');
+                          }
+                        }}
+                        className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        Resend
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl transition-colors">
                     <Calendar className="w-5 h-5 text-gray-500" />

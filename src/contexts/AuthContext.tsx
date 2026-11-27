@@ -111,7 +111,10 @@ interface AuthContextType {
   verifying: boolean;
   authError: string | null;
   clearAuthError: () => void;
-  signInWithGoogle: (returnPath?: string, options?: { popupOnly?: boolean }) => Promise<void>;
+  signInWithGoogle: (
+    returnPath?: string,
+    options?: { popupOnly?: boolean; forceRedirect?: boolean }
+  ) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -144,6 +147,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const resolveRedirect = async () => {
       const hadPendingRedirect = isRedirectPending();
 
+      // Surface OAuth query errors (e.g. ?error=access_denied when OAuth consent screen is in Testing mode)
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const oauthErr = params.get('error');
+        if (oauthErr) {
+          setRedirectFailed(true);
+          setAuthError(
+            oauthErr === 'access_denied'
+              ? 'auth/access-denied: Google blocked sign-in for this account. If OAuth Consent Screen is in Testing mode, publish it to Production or add this email as a Test user.'
+              : `OAuth error: ${oauthErr}`
+          );
+          setRedirectPending(false);
+          redirectSettled = true;
+          finishLoadingIfReady();
+          return;
+        }
+      } catch {
+        // Ignore URL parsing issues
+      }
+
       try {
         const result = await getRedirectResult(auth, browserPopupRedirectResolver);
         if (!isMounted) return;
@@ -172,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAuthError(`auth/unauthorized-domain: ${window.location.hostname}`);
           } else {
             setRedirectFailed(true);
-            setAuthError(error.message || 'Could not complete Google redirect sign-in.');
+            setAuthError(code ? `${code}: ${error.message || 'Could not complete Google redirect sign-in.'}` : (error.message || 'Could not complete Google redirect sign-in.'));
           }
         }
       } finally {
@@ -203,7 +226,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = async (returnPath?: string, options?: { popupOnly?: boolean }) => {
+  const signInWithGoogle = async (
+    returnPath?: string,
+    options?: { popupOnly?: boolean; forceRedirect?: boolean }
+  ) => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     setAuthError(null);
@@ -238,6 +264,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      // Explicit redirect option if requested directly by user
+      if (options?.forceRedirect) {
+        setRedirectPending(true);
+        await signInWithRedirect(auth, provider, browserPopupRedirectResolver);
+        return;
+      }
+
       // 2. Popup-first across all devices (Mobile Chrome/Safari & Desktop).
       // Pass browserPopupRedirectResolver explicitly so Firebase resolves cleanly across browsers.
       try {
@@ -250,26 +283,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       } catch (popupError: any) {
         const code = popupError?.code || '';
-        const canTryRedirectFallback =
+        const isSameOriginAuthDomain =
+          typeof window !== 'undefined' &&
+          auth.app.options.authDomain === window.location.hostname;
+
+        // Only auto-fallback to redirect when authDomain matches the current host (same-origin),
+        // because cross-origin redirect triggers third-party cookie/storage loss loops.
+        const canTryAutoRedirectFallback =
           !options?.popupOnly &&
+          isSameOriginAuthDomain &&
           !hasRedirectFailedRecently() &&
           (code === 'auth/popup-blocked' ||
             code === 'auth/operation-not-supported-in-this-environment');
 
-        if (canTryRedirectFallback) {
-          console.warn('Popup blocked or unsupported, trying single redirect fallback:', code);
+        if (canTryAutoRedirectFallback) {
+          console.warn('Popup blocked on same-origin host, trying redirect fallback:', code);
           setRedirectPending(true);
           await signInWithRedirect(auth, provider, browserPopupRedirectResolver);
           return;
-        }
-
-        // Prevent silent loop if popup was blocked after an already-failed redirect
-        if (code === 'auth/popup-blocked' && hasRedirectFailedRecently()) {
-          const err: any = new Error(
-            'POPUP_AND_REDIRECT_BLOCKED: Your browser blocked both pop-ups and redirect cookies. Allow pop-ups for this site or open in Chrome/Safari.'
-          );
-          err.code = 'auth/popup-blocked';
-          throw err;
         }
 
         throw popupError;

@@ -36,12 +36,21 @@ export default function Login() {
           <code className="block bg-red-900/20 px-2 py-1 rounded text-[11px] break-all">{window.location.hostname}</code>
         </div>
       );
+    } else if (authError.includes('auth/access-denied') || authError.includes('auth/admin-restricted-operation') || authError.includes('auth/operation-not-allowed')) {
+      setLocalError(
+        <div className="text-left space-y-2">
+          <p className="font-bold text-amber-600 dark:text-amber-400">Account Access Restricted by OAuth / Firebase</p>
+          <p className="text-xs leading-relaxed">
+            Google blocked sign-in for this email. In Google Cloud Console &gt; OAuth consent screen, switch Publishing status from <b>Testing</b> to <b>In production</b> (or add this email under Test users), and verify <b>Enable create (sign-up)</b> is enabled in Firebase Authentication settings.
+          </p>
+        </div>
+      );
     } else if (authError.includes('REDIRECT_STATE_LOST') || authError.includes('missing initial state')) {
       setLocalError(
         <div className="text-left space-y-2">
           <p className="font-bold text-amber-600 dark:text-amber-400">Browser Blocked Redirect Session</p>
           <p className="text-xs leading-relaxed">
-            Your browser cleared the Google redirect state on return. Allow pop-ups when prompted and tap <b>Sign in with Google (Pop-up)</b> below, or open this page in Chrome/Safari.
+            Your browser cleared the Google redirect state on return. Allow pop-ups when prompted and tap <b>Sign in with Google</b> below, or open this page in Chrome/Safari.
           </p>
         </div>
       );
@@ -52,13 +61,13 @@ export default function Login() {
 
   const isVerifying = authLoading || verifying || isSubmitting || Boolean(user);
 
-  const handleGoogleSignIn = async (popupOnly = false) => {
+  const handleGoogleSignIn = async (popupOnly = false, forceRedirect = false) => {
     setIsSubmitting(true);
     setLocalError(null);
     clearAuthError();
 
     try {
-      await signInWithGoogle(from, { popupOnly });
+      await signInWithGoogle(from, { popupOnly, forceRedirect });
       // Navigation happens automatically via the useEffect once user state is confirmed.
     } catch (err: any) {
       const code = err?.code || '';
@@ -71,21 +80,44 @@ export default function Login() {
             <code className="block bg-red-900/20 px-2 py-1 rounded text-[11px] break-all">{window.location.hostname}</code>
           </div>
         );
+      } else if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation' || code === 'auth/user-disabled' || msg.includes('access_denied')) {
+        setLocalError(
+          <div className="text-left space-y-2">
+            <p className="font-bold text-amber-600 dark:text-amber-400">Account Access Restricted ({code || 'access_denied'})</p>
+            <p className="text-xs leading-relaxed">
+              This email cannot sign in yet. Ensure Firebase Auth allows new user sign-ups and your Google Cloud OAuth consent screen is set to <b>In production</b> (not <b>Testing</b>).
+            </p>
+          </div>
+        );
       } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        setLocalError('Sign-in was cancelled before completing. Tap Sign in with Google when you are ready.');
-      } else if (code === 'auth/popup-blocked' || msg.includes('POPUP_AND_REDIRECT_BLOCKED')) {
+        setLocalError(
+          <div className="text-left space-y-1.5">
+            <p className="font-bold">Sign-in Popup Closed</p>
+            <p className="text-xs leading-relaxed">
+              The sign-in popup closed before completing. If Google showed <b>"Access blocked"</b> for another email, set your Google Cloud OAuth consent screen to <b>In production</b> (or add that email under Test users).
+            </p>
+          </div>
+        );
+      } else if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || msg.includes('POPUP_AND_REDIRECT_BLOCKED')) {
         setLocalError(
           <div className="text-left space-y-2.5">
             <p className="font-bold text-amber-600 dark:text-amber-400">Pop-up Blocked by Browser</p>
             <p className="text-xs leading-relaxed">
-              Your browser blocked the Google sign-in pop-up and cleared redirect cookies. Allow pop-ups for this site, then tap below:
+              Your browser blocked the Google sign-in pop-up. Allow pop-ups for <code className="px-1 py-0.5 rounded bg-black/20">{window.location.hostname}</code> and retry:
             </p>
             <button
               type="button"
-              onClick={() => handleGoogleSignIn(true)}
+              onClick={() => handleGoogleSignIn(true, false)}
               className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 text-white text-xs py-2.5 px-4 rounded-xl font-bold transition-colors cursor-pointer"
             >
-              Sign in via Pop-up
+              Retry Pop-up Sign-In
+            </button>
+            <button
+              type="button"
+              onClick={() => handleGoogleSignIn(false, true)}
+              className="w-full min-h-[40px] bg-gray-900/10 dark:bg-white/10 hover:bg-gray-900/20 dark:hover:bg-white/20 text-xs py-2 px-4 rounded-xl font-semibold transition-colors cursor-pointer"
+            >
+              Try Redirect Sign-In Instead
             </button>
             <button
               type="button"
@@ -113,7 +145,7 @@ export default function Login() {
           </div>
         );
       } else {
-        setLocalError(msg || 'Failed to sign in. Please try again.');
+        setLocalError(code ? `${code}: ${msg || 'Failed to sign in.'}` : (msg || 'Failed to sign in. Please try again.'));
       }
     } finally {
       setIsSubmitting(false);
